@@ -96,13 +96,18 @@ async function queryOverpass(query) {
     try {
       const elements = await fetchEndpoint(url, query, ctrl.signal)
       clearTimeout(timer)
+      // Validate: must be an array
+      if (!Array.isArray(elements)) return []
       return elements
     } catch {
       clearTimeout(timer)
       // try next endpoint
     }
   }
-  throw new Error('Overpass API no disponible')
+  // All endpoints failed — return empty instead of throwing,
+  // so callers always get an array and never crash.
+  console.warn('[overpass] All endpoints failed, returning empty array')
+  return []
 }
 
 // ── Parsers ───────────────────────────────────────────────────────────────────
@@ -125,47 +130,59 @@ function mapsUrl(lat, lon, name) {
 }
 
 function parseVet(el, uLat, uLon) {
-  const { lat, lon } = coords(el)
-  const tags = el.tags || {}
-  const km = distanceKm(uLat, uLon, lat, lon)
-  return {
-    id: el.id,
-    name: tags.name || 'Veterinaria',
-    distance: formatDistance(km),
-    distanceKm: km,
-    specialty: tags.veterinary || tags.healthcare || 'General',
-    open: tags.opening_hours ? !tags.opening_hours.includes('off') : true,
-    urgent: (tags.opening_hours || '').includes('24/7'),
-    phone: osmPhone(tags),
-    address: osmAddress(tags),
-    mapsUrl: mapsUrl(lat, lon, tags.name),
-    lat, lon,
+  try {
+    const { lat, lon } = coords(el)
+    if (lat == null || lon == null) return null
+    const tags = el.tags || {}
+    const km = distanceKm(uLat, uLon, lat, lon)
+    if (!isFinite(km)) return null
+    return {
+      id: el.id,
+      name: tags.name || 'Veterinaria',
+      distance: formatDistance(km),
+      distanceKm: km,
+      specialty: tags.veterinary || tags.healthcare || 'General',
+      open: tags.opening_hours ? !tags.opening_hours.includes('off') : true,
+      urgent: (tags.opening_hours || '').includes('24/7'),
+      phone: osmPhone(tags),
+      address: osmAddress(tags),
+      mapsUrl: mapsUrl(lat, lon, tags.name),
+      lat, lon,
+    }
+  } catch {
+    return null
   }
 }
 
 function parseStore(el, uLat, uLon) {
-  const { lat, lon } = coords(el)
-  const tags = el.tags || {}
-  const km = distanceKm(uLat, uLon, lat, lon)
-  const typeMap = {
-    pet: 'Tienda de mascotas',
-    pet_food: 'Alimentos para mascotas',
-    groomer: 'Grooming & estética',
-    aquarium: 'Peces & acuarios',
-    animal: 'Animales & accesorios',
-  }
-  return {
-    id: el.id,
-    name: tags.name || 'Tienda',
-    type: typeMap[tags.shop] || 'Productos para mascotas',
-    distance: formatDistance(km),
-    distanceKm: km,
-    icon: tags.shop === 'groomer' ? '✂️' : tags.shop === 'aquarium' ? '🐟' : '🐾',
-    discount: null,
-    phone: osmPhone(tags),
-    address: osmAddress(tags),
-    mapsUrl: mapsUrl(lat, lon, tags.name),
-    lat, lon,
+  try {
+    const { lat, lon } = coords(el)
+    if (lat == null || lon == null) return null
+    const tags = el.tags || {}
+    const km = distanceKm(uLat, uLon, lat, lon)
+    if (!isFinite(km)) return null
+    const typeMap = {
+      pet: 'Tienda de mascotas',
+      pet_food: 'Alimentos para mascotas',
+      groomer: 'Grooming & estética',
+      aquarium: 'Peces & acuarios',
+      animal: 'Animales & accesorios',
+    }
+    return {
+      id: el.id,
+      name: tags.name || 'Tienda',
+      type: typeMap[tags.shop] || 'Productos para mascotas',
+      distance: formatDistance(km),
+      distanceKm: km,
+      icon: tags.shop === 'groomer' ? '✂️' : tags.shop === 'aquarium' ? '🐟' : '🐾',
+      discount: null,
+      phone: osmPhone(tags),
+      address: osmAddress(tags),
+      mapsUrl: mapsUrl(lat, lon, tags.name),
+      lat, lon,
+    }
+  } catch {
+    return null
   }
 }
 
@@ -176,14 +193,18 @@ function parseStore(el, uLat, uLon) {
  */
 export async function fetchNearbyVets(lat, lon) {
   for (const r of [5000, 15_000]) {
-    const els = await queryOverpass(
-      buildQuery(lat, lon, r, [['amenity', 'veterinary']])
-    )
-    const results = els
-      .map(el => parseVet(el, lat, lon))
-      .filter(v => v.lat && v.lon)
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-    if (results.length > 0) return results
+    try {
+      const els = await queryOverpass(
+        buildQuery(lat, lon, r, [['amenity', 'veterinary']])
+      )
+      const results = els
+        .map(el => parseVet(el, lat, lon))
+        .filter(Boolean)
+        .sort((a, b) => a.distanceKm - b.distanceKm)
+      if (results.length > 0) return results
+    } catch {
+      // radio fallido, intentar el siguiente
+    }
   }
   return []
 }
@@ -196,17 +217,17 @@ export async function fetchNearbyPetShops(lat, lon) {
   const shopTypes = ['pet', 'pet_food', 'groomer', 'aquarium', 'animal']
 
   for (const r of [5000, 15_000]) {
-    // Lanza las consultas en paralelo, una por tipo
+    try {
     const all = await Promise.allSettled(
       shopTypes.map(type =>
         queryOverpass(buildQuery(lat, lon, r, [['shop', type]]))
-          .then(els => els.map(el => parseStore(el, lat, lon)))
+          .then(els => els.map(el => parseStore(el, lat, lon)).filter(Boolean))
+          .catch(() => [])
       )
     )
 
     const merged = all
-      .flatMap(res => (res.status === 'fulfilled' ? res.value : []))
-      .filter(s => s.lat && s.lon)
+      .flatMap(res => res.status === 'fulfilled' ? res.value : [])
 
     // Dedup por id
     const seen = new Set()
@@ -218,6 +239,9 @@ export async function fetchNearbyPetShops(lat, lon) {
 
     const sorted = unique.sort((a, b) => a.distanceKm - b.distanceKm)
     if (sorted.length > 0) return sorted
+    } catch {
+      // radio fallido, intentar el siguiente
+    }
   }
   return []
 }

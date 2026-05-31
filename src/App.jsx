@@ -4,6 +4,7 @@ import { getLocation, fetchNearbyVets, fetchNearbyPetShops } from "./lib/overpas
 import { F, ThemeContext, useTheme } from "./lib/theme";
 import BusinessForm from "./components/BusinessForm";
 import WalkerForm from "./components/WalkerForm";
+import { TabErrorBoundary } from "./components/ErrorBoundary";
 
 /* ── Theme ── */
 /* Paleta brand: naranja #FF8C00 · teal #2DD4BF · azul oscuro #1B3A6B */
@@ -85,32 +86,63 @@ function useData(table, fallback) {
 
 /* ── Overpass (OpenStreetMap) hook ──────────────────────────────────────────
    Obtiene ubicación → consulta Overpass → retorna resultados reales.
-   Si algo falla, usa el fallback (mock data) de forma silenciosa.
+   Múltiples capas de error handling para que nunca quede en loading eterno
+   ni cause pantalla en blanco en producción.
 ─────────────────────────────────────────────────────────────────────────── */
+const SANTIAGO_FALLBACK = { lat: -33.4569, lon: -70.6483, source: "default" };
+
 function useOverpassData(fetcher, fallback) {
+  const safeFallback = Array.isArray(fallback) ? fallback : (fallback ? [fallback] : []);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [locationSource, setLocationSource] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    const finish = (results, src) => {
+      if (cancelled) return;
+      const safe = Array.isArray(results) && results.length > 0 ? results : safeFallback;
+      setData(safe);
+      if (src) setLocationSource(src);
+      setLoading(false);
+    };
+
+    // Safety net: si en 28 s nada resolvió, fuerza fallback
+    const safety = setTimeout(() => finish(safeFallback, "timeout"), 28_000);
+
     (async () => {
       try {
-        const loc = await getLocation();
+        // Capa 1: geolocalización (nunca debe lanzar, pero por las dudas)
+        const loc = await getLocation().catch(() => SANTIAGO_FALLBACK);
         if (cancelled) return;
         setLocationSource(loc.source);
-        const results = await fetcher(loc.lat, loc.lon);
-        if (!cancelled) setData(results.length > 0 ? results : fallback);
-      } catch {
-        if (!cancelled) setData(fallback);
-      } finally {
-        if (!cancelled) setLoading(false);
+
+        // Capa 2: fetch Overpass (ya retorna [] en vez de lanzar)
+        let results = [];
+        try {
+          results = await fetcher(loc.lat, loc.lon);
+        } catch (fetchErr) {
+          console.warn("[useOverpassData] fetcher error, using fallback:", fetchErr?.message);
+        }
+
+        clearTimeout(safety);
+        finish(results, null);
+      } catch (outerErr) {
+        // Capa 3: cualquier otra excepción inesperada
+        console.warn("[useOverpassData] unexpected error, using fallback:", outerErr?.message);
+        clearTimeout(safety);
+        finish(safeFallback, "default");
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
 
-  return { data: data ?? fallback, loading, locationSource };
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { data: data ?? safeFallback, loading, locationSource };
 }
 
 /* ── Supabase businesses hook ────────────────────────────────────────────────
@@ -1426,7 +1458,9 @@ export default function PetConnect({ isDark, toggleTheme }) {
           unread={unreadCount}
         />
         <div style={{ flex:1, overflowY:"auto", paddingBottom:80 }}>
-          {content[currentTab]}
+          <TabErrorBoundary key={currentTab}>
+            {content[currentTab]}
+          </TabErrorBoundary>
         </div>
         {!showNotif && !subTab && (
           <NavBar
