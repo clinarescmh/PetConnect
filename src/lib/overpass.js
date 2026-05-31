@@ -6,10 +6,14 @@
 
 const SANTIAGO = { lat: -33.4569, lon: -70.6483 }
 
-// Dos endpoints en caso de que uno esté lento o caído
+// Endpoints en orden de preferencia:
+// 1. kumi.systems  — CORS abierto, más confiable en producción
+// 2. overpass-api.de — servidor principal, a veces bloquea CORS en browsers
+// 3. openstreetmap.ru — respaldo adicional
 const ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.openstreetmap.ru/cgi/interpreter',
 ]
 
 // ── Geolocalización ───────────────────────────────────────────────────────────
@@ -20,25 +24,38 @@ const ENDPOINTS = [
  */
 export async function getLocation(timeoutMs = 6000) {
   return new Promise((resolve) => {
+    const fallback = { ...SANTIAGO, source: 'default' }
+
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      return resolve({ ...SANTIAGO, source: 'default' })
+      return resolve(fallback)
     }
 
     const done = (pos) => {
       clearTimeout(timer)
+      // Validar que las coordenadas son números finitos y razonables
+      const { lat, lon } = pos
+      if (!isFinite(lat) || !isFinite(lon) ||
+          lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        console.warn('[getLocation] coords inválidas, usando Santiago:', lat, lon)
+        return resolve(fallback)
+      }
       resolve(pos)
     }
 
     const timer = setTimeout(
-      () => done({ ...SANTIAGO, source: 'timeout' }),
+      () => {
+        console.warn('[getLocation] timeout, usando Santiago centro')
+        resolve({ ...SANTIAGO, source: 'timeout' })
+      },
       timeoutMs
     )
 
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) =>
-        done({ lat: coords.latitude, lon: coords.longitude, source: 'gps' }),
-      () =>
-        done({ ...SANTIAGO, source: 'denied' }),
+      ({ coords }) => done({ lat: coords.latitude, lon: coords.longitude, source: 'gps' }),
+      (err) => {
+        console.warn('[getLocation] denegado/error:', err?.code, err?.message)
+        done({ ...SANTIAGO, source: 'denied' })
+      },
       { timeout: timeoutMs - 500, maximumAge: 120_000, enableHighAccuracy: false }
     )
   })
@@ -80,7 +97,10 @@ function buildQuery(lat, lon, radiusM, tags) {
 async function fetchEndpoint(url, query, signal) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+    },
     body: `data=${encodeURIComponent(query)}`,
     signal,
   })

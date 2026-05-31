@@ -296,6 +296,97 @@ function SectionLabel({ label }) {
   );
 }
 
+/* ── DogLoader — animación CSS pura, sin librerías ──────────────────────────
+   Perrito corriendo persiguiendo un hueso, usando @keyframes y emojis.
+   El contenedor tiene overflow:hidden; el personaje recorre de izquierda
+   a derecha en un loop continuo.
+─────────────────────────────────────────────────────────────────────────── */
+function DogLoader({ message }) {
+  const { C } = useTheme();
+  return (
+    <div style={{ padding:"40px 0 24px", userSelect:"none" }}>
+      <style>{`
+        @keyframes pc-scene {
+          0%   { left: -90px; }
+          100% { left: calc(100% + 50px); }
+        }
+        @keyframes pc-bounce {
+          0%, 100% { transform: translateY(0px)   scaleY(1);    }
+          30%       { transform: translateY(-12px) scaleY(0.92); }
+          65%       { transform: translateY(-4px)  scaleY(1.04); }
+        }
+        @keyframes pc-bone {
+          0%, 100% { transform: rotate(-18deg) translateY(-2px); }
+          50%       { transform: rotate(18deg)  translateY(-9px); }
+        }
+        @keyframes pc-shadow {
+          0%, 100% { transform: scaleX(1);    opacity: 0.18; }
+          30%       { transform: scaleX(0.6);  opacity: 0.10; }
+          65%       { transform: scaleX(0.85); opacity: 0.14; }
+        }
+        @keyframes pc-dust {
+          0%   { opacity: 0.55; transform: translateX(0)    scale(1);    }
+          100% { opacity: 0;    transform: translateX(-18px) scale(0.4); }
+        }
+      `}</style>
+
+      {/* Pista de carrera */}
+      <div style={{ position:"relative", height:80, overflow:"hidden" }}>
+
+        {/* Línea del suelo */}
+        <div style={{
+          position:"absolute", bottom:12, left:"4%", right:"4%",
+          height:2, borderRadius:2,
+          background:`linear-gradient(to right, transparent, ${C.border} 15%, ${C.border} 85%, transparent)`,
+        }} />
+
+        {/* Escena: polvo + perro + hueso — todo se mueve junto */}
+        <div style={{
+          position:"absolute", top:10,
+          display:"flex", alignItems:"flex-end", gap:4,
+          animation:"pc-scene 1.7s linear infinite",
+        }}>
+          {/* Nube de polvo */}
+          <span style={{
+            fontSize:16, marginBottom:6, lineHeight:1,
+            animation:"pc-dust 0.35s ease-out infinite",
+          }}>💨</span>
+
+          {/* Perrito con rebote */}
+          <span style={{
+            fontSize:38, lineHeight:1, display:"inline-block",
+            animation:"pc-bounce 0.35s ease-in-out infinite",
+          }}>🐕</span>
+
+          {/* Hueso adelante */}
+          <span style={{
+            fontSize:26, lineHeight:1, display:"inline-block",
+            marginLeft:8,
+            animation:"pc-bone 0.7s ease-in-out infinite",
+          }}>🦴</span>
+        </div>
+
+        {/* Sombra del perro (efecto suelo) */}
+        <div style={{
+          position:"absolute", bottom:8,
+          width:32, height:6, borderRadius:"50%",
+          background:C.textMuted,
+          animation:"pc-scene 1.7s linear infinite, pc-shadow 0.35s ease-in-out infinite",
+          marginLeft:6,
+        }} />
+      </div>
+
+      {/* Mensaje */}
+      <div style={{
+        textAlign:"center", fontFamily:F.body, fontSize:13,
+        color:C.textSub, fontWeight:500, marginTop:4,
+      }}>
+        {message ?? "Buscando en tu zona…"}
+      </div>
+    </div>
+  );
+}
+
 /* ── Loading Skeleton ── */
 function LoadingRows({ count = 3 }) {
   const { C } = useTheme();
@@ -1250,14 +1341,7 @@ function VetsTab() {
 
       {/* Estado: cargando (lista vacía) */}
       {osmLoading && osmVets.length === 0 && bizVets.length === 0 && (
-        <div>
-          <div style={{ textAlign:"center", fontFamily:F.body, fontSize:13, color:C.textSub,
-            marginBottom:16, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-            <span style={{ fontSize:16 }}>🔍</span>
-            Buscando veterinarias cercanas…
-          </div>
-          <LoadingRows count={4} />
-        </div>
+        <DogLoader message="Buscando veterinarias cercanas…" />
       )}
 
       {/* Estado: actualización silenciosa (ya hay resultados) */}
@@ -1461,14 +1545,7 @@ function StoresTab() {
 
       {/* Estado: cargando (lista vacía) */}
       {osmLoading && osmStores.length === 0 && bizStores.length === 0 && (
-        <div>
-          <div style={{ textAlign:"center", fontFamily:F.body, fontSize:13, color:C.textSub,
-            marginBottom:16, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-            <span style={{ fontSize:16 }}>🔍</span>
-            Buscando tiendas cercanas…
-          </div>
-          <LoadingRows count={4} />
-        </div>
+        <DogLoader message="Buscando tiendas cercanas…" />
       )}
 
       {/* Estado: actualización silenciosa */}
