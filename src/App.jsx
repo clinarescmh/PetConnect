@@ -1153,7 +1153,7 @@ function VetsTab() {
   // ── Estado siempre inicializado con mock data ──────────────────────────────
   // La tab NUNCA bloquea en loading ni arroja variables indefinidas.
   // Overpass y Supabase son mejoras en background; si fallan, se queda el mock.
-  const [osmVets, setOsmVets]         = useState(mockVets);
+  const [osmVets, setOsmVets]         = useState([]);   // empieza vacío, sin mock
   const [bizVets, setBizVets]         = useState([]);
   const [locationSource, setLocSrc]   = useState(null);
   const [osmLoading, setOsmLoading]   = useState(false);
@@ -1248,11 +1248,38 @@ function VetsTab() {
         <SearchBar placeholder="Buscar veterinarios..." value={search} onChange={setSearch} />
       </div>
 
-      {/* Indicador background-loading (no bloquea render) */}
-      {osmLoading && (
+      {/* Estado: cargando (lista vacía) */}
+      {osmLoading && osmVets.length === 0 && bizVets.length === 0 && (
+        <div>
+          <div style={{ textAlign:"center", fontFamily:F.body, fontSize:13, color:C.textSub,
+            marginBottom:16, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            <span style={{ fontSize:16 }}>🔍</span>
+            Buscando veterinarias cercanas…
+          </div>
+          <LoadingRows count={4} />
+        </div>
+      )}
+
+      {/* Estado: actualización silenciosa (ya hay resultados) */}
+      {osmLoading && (osmVets.length > 0 || bizVets.length > 0) && (
         <div style={{ textAlign:"center", fontFamily:F.body, fontSize:11, color:C.textMuted,
-          marginBottom:12, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-          <span style={{ opacity:0.5 }}>🔄</span> Actualizando con datos reales…
+          marginBottom:10, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <span style={{ opacity:0.5 }}>🔄</span> Actualizando…
+        </div>
+      )}
+
+      {/* Estado: sin resultados */}
+      {!osmLoading && filteredBiz.length === 0 && filteredOSM.length === 0 && !search && (
+        <div style={{ textAlign:"center", padding:"40px 24px" }}>
+          <div style={{ fontSize:52 }}>🏥</div>
+          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:17, color:C.text, marginTop:14 }}>
+            No se encontraron veterinarias
+          </div>
+          <div style={{ fontFamily:F.body, fontSize:13, color:C.textSub, marginTop:8,
+            lineHeight:1.6, maxWidth:260, margin:"8px auto 0" }}>
+            No hay resultados en OpenStreetMap para tu zona.
+            Intenta activar la ubicación para buscar más cerca.
+          </div>
         </div>
       )}
 
@@ -1264,7 +1291,7 @@ function VetsTab() {
         </>
       )}
 
-      {/* Resultados (OSM real o mock) */}
+      {/* Resultados OSM */}
       {filteredOSM.length > 0 && (
         <>
           {filteredBiz.length > 0 && (
@@ -1317,7 +1344,7 @@ function VetsTab() {
         </>
       )}
 
-      {/* Sin resultados (solo si búsqueda activa) */}
+      {/* Sin resultados para búsqueda activa */}
       {search && filteredBiz.length === 0 && filteredOSM.length === 0 && (
         <div style={{ ...makeCard(C), padding:"28px", textAlign:"center" }}>
           <div style={{ fontSize:42 }}>🔍</div>
@@ -1339,7 +1366,7 @@ function StoresTab() {
   const [search, setSearch] = useState("");
 
   // ── Estado siempre inicializado con mock data ──────────────────────────────
-  const [osmStores, setOsmStores]   = useState(mockStores);
+  const [osmStores, setOsmStores]   = useState([]);   // empieza vacío, sin mock
   const [bizStores, setBizStores]   = useState([]);
   const [locationSource, setLocSrc] = useState(null);
   const [osmLoading, setOsmLoading] = useState(false);
@@ -1432,11 +1459,38 @@ function StoresTab() {
         <FilterRow items={STORE_FILTERS} active={cat} setActive={setCat} color={C.teal} />
       </div>
 
-      {/* Indicador background-loading */}
-      {osmLoading && (
+      {/* Estado: cargando (lista vacía) */}
+      {osmLoading && osmStores.length === 0 && bizStores.length === 0 && (
+        <div>
+          <div style={{ textAlign:"center", fontFamily:F.body, fontSize:13, color:C.textSub,
+            marginBottom:16, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            <span style={{ fontSize:16 }}>🔍</span>
+            Buscando tiendas cercanas…
+          </div>
+          <LoadingRows count={4} />
+        </div>
+      )}
+
+      {/* Estado: actualización silenciosa */}
+      {osmLoading && (osmStores.length > 0 || bizStores.length > 0) && (
         <div style={{ textAlign:"center", fontFamily:F.body, fontSize:11, color:C.textMuted,
-          marginBottom:12, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-          <span style={{ opacity:0.5 }}>🔄</span> Actualizando con datos reales…
+          marginBottom:10, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <span style={{ opacity:0.5 }}>🔄</span> Actualizando…
+        </div>
+      )}
+
+      {/* Estado: sin resultados */}
+      {!osmLoading && filteredBiz.length === 0 && filteredOSM.length === 0 && !search && (
+        <div style={{ textAlign:"center", padding:"40px 24px" }}>
+          <div style={{ fontSize:52 }}>🛒</div>
+          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:17, color:C.text, marginTop:14 }}>
+            No se encontraron tiendas
+          </div>
+          <div style={{ fontFamily:F.body, fontSize:13, color:C.textSub, marginTop:8,
+            lineHeight:1.6, maxWidth:260, margin:"8px auto 0" }}>
+            No hay resultados en OpenStreetMap para tu zona.
+            Intenta activar la ubicación para buscar más cerca.
+          </div>
         </div>
       )}
 
@@ -1448,7 +1502,7 @@ function StoresTab() {
         </>
       )}
 
-      {/* Resultados OSM o mock */}
+      {/* Resultados OSM */}
       {filteredOSM.length > 0 && (
         <>
           {filteredBiz.length > 0 && (
@@ -1497,7 +1551,7 @@ function StoresTab() {
         </>
       )}
 
-      {/* Sin resultados solo si hay búsqueda activa */}
+      {/* Sin resultados para búsqueda activa */}
       {search && filteredBiz.length === 0 && filteredOSM.length === 0 && (
         <div style={{ ...makeCard(C), padding:"28px", textAlign:"center" }}>
           <div style={{ fontSize:42 }}>🔍</div>
