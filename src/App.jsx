@@ -419,9 +419,9 @@ const makeCard = (C, extra = {}) => ({
 
 /* ── Mock data (fallback si Supabase no responde) ── */
 const mockPets = [
-  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿", time_ago:"2h", tag:"#lavidacanina", photo:"/dog1.jpeg" },
+  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿", time_ago:"2h", tag:"#lavidacanina", photo:"/Dog1.jpeg" },
   { id:2, name:"Luna",   breed:"Gata Persa",       owner:"Pedro R.", avatar:"🐈", owner_avatar:"👨", likes:267, comments:41, caption:"Reinando el balcón como siempre 👑",    time_ago:"4h", tag:"#catlife",      photo:"/cat1.jpeg" },
-  { id:3, name:"Max",    breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89,  comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉", time_ago:"6h", tag:"#perrofeliz",  photo:"/dog2.jpeg" },
+  { id:3, name:"Max",    breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89,  comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉", time_ago:"6h", tag:"#perrofeliz",  photo:"/Dog2.jpeg" },
 ];
 const mockVets = [
   { id:1, name:"Clínica PetCare",  distance:"0.8 km", rating:4.8, open:true, specialty:"General",   icon:"🏥", urgent:false },
@@ -716,10 +716,10 @@ function Stories() {
   const { C } = useTheme();
   const items = [
     { emoji:"➕",  name:"Añadir", dim:true },
-    { photo:"/dog1.jpeg", emoji:"🐕", name:"Tobías" },
+    { photo:"/Dog1.jpeg", emoji:"🐕", name:"Tobías" },
     { photo:"/cat1.jpeg", emoji:"🐈", name:"Luna"   },
-    { photo:"/dog2.jpeg", emoji:"🐶", name:"Max"    },
-    { photo:"/dog3.jpeg", emoji:"🐺", name:"Thor"   },
+    { photo:"/Dog2.jpeg", emoji:"🐶", name:"Max"    },
+    { photo:"/Dog3.jpeg", emoji:"🐺", name:"Thor"   },
     { emoji:"🐹", name:"Coco" },
     { emoji:"🐰", name:"Nala" },
     { emoji:"🦜", name:"Kiwi" },
@@ -767,8 +767,13 @@ function PostCard({ post }) {
           <div style={{ position:"absolute", bottom:-3, right:-3, width:20, height:20, borderRadius:7, background:C.bgCard, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, border:`1px solid ${C.border}` }}>{post.owner_avatar}</div>
         </div>
         <div>
-          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14, color:C.text }}>{post.name || post.breed}</div>
-          <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub }}>{post.owner}{post.time_ago ? ` · ${post.time_ago}` : ''}</div>
+          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14, color:C.text }}>
+            {post.name || post.breed || "Mascota"}
+          </div>
+          <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub }}>
+            {[post.name && post.breed ? post.breed : null, post.owner, post.time_ago]
+              .filter(Boolean).join(" · ")}
+          </div>
         </div>
         <button style={{ marginLeft:"auto", background:"none", border:"none", color:C.textMuted, cursor:"pointer", fontSize:18 }}>⋯</button>
       </div>
@@ -1281,9 +1286,6 @@ function VetsTab() {
   const [bizVets, setBizVets]         = useState([]);
   const [locationSource, setLocSrc]   = useState(null);
   const [osmLoading, setOsmLoading]   = useState(false);
-  // ── Debug temporal (eliminar cuando Overpass funcione en prod) ──
-  const [dbg, setDbg]         = useState({});
-  const [showDbg, setShowDbg] = useState(false);
 
   // Supabase businesses — silent fail, no bloquea render
   useEffect(() => {
@@ -1305,42 +1307,29 @@ function VetsTab() {
     const safety = setTimeout(() => { if (!cancelled) setOsmLoading(false); }, 20_000);
 
     setOsmLoading(true);
-    setDbg({ step: "iniciando…" });
-    console.log('[VetsTab] useEffect Overpass disparado');
+    console.log('[VetsTab] useEffect Nominatim disparado');
 
     (async () => {
       try {
-        // Paso 1: ubicación
-        setDbg(d => ({ ...d, step: "obteniendo ubicación…" }));
-        console.log('[VetsTab] llamando getLocation()');
         const loc = await getLocation().catch(e => {
           console.warn('[VetsTab] getLocation error:', e?.message);
           return FALLBACK;
         });
         if (cancelled) return;
 
-        const coordStr = `${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)} [${loc.source}]`;
-        console.log('[VetsTab] coords:', coordStr);
+        console.log('[VetsTab] coords:', loc.lat.toFixed(5), loc.lon.toFixed(5), loc.source);
         setLocSrc(loc.source ?? "default");
-        setDbg(d => ({ ...d, step: "buscando en OSM…", coords: coordStr }));
 
-        // Paso 2: Overpass
-        const t0 = performance.now();
         const results = await fetchNearbyVets(loc.lat, loc.lon).catch(e => {
           console.warn('[VetsTab] fetchNearbyVets error:', e?.message);
-          setDbg(d => ({ ...d, error: e?.message ?? "error desconocido" }));
           return [];
         });
         if (cancelled) return;
 
-        const ms = Math.round(performance.now() - t0);
-        console.log('[VetsTab] resultados:', results.length, 'en', ms, 'ms');
-        setDbg(d => ({ ...d, step: "listo", count: results.length, ms }));
-
+        console.log('[VetsTab] resultados:', results.length);
         if (Array.isArray(results) && results.length > 0) setOsmVets(results);
       } catch (err) {
         console.warn('[VetsTab] error inesperado:', err?.message);
-        setDbg(d => ({ ...d, step: "error", error: err?.message }));
       } finally {
         clearTimeout(safety);
         if (!cancelled) setOsmLoading(false);
@@ -1397,48 +1386,6 @@ function VetsTab() {
 
       <div style={{ marginBottom:14 }}>
         <SearchBar placeholder="Buscar veterinarios..." value={search} onChange={setSearch} />
-      </div>
-
-      {/* ── Panel debug temporal — eliminar cuando Overpass funcione en prod ── */}
-      <div style={{ marginBottom:10 }}>
-        <button onClick={() => setShowDbg(s => !s)} style={{
-          background:C.bgElevated, border:`1px solid ${C.border}`,
-          borderRadius:10, padding:"5px 12px", fontFamily:F.body,
-          fontSize:11, color:C.textMuted, cursor:"pointer",
-          display:"flex", alignItems:"center", gap:5,
-        }}>
-          <span>🔧 Debug OSM {showDbg ? "▲" : "▼"}</span>
-          {dbg.count != null && (
-            <span style={{ color: dbg.count > 0 ? C.teal : C.red, fontWeight:700 }}>
-              · {dbg.count} resultados
-            </span>
-          )}
-        </button>
-        {showDbg && (
-          <div style={{
-            marginTop:6, background:C.bgCard,
-            border:`1px solid ${C.borderHi}`, borderRadius:12,
-            padding:"12px 14px", fontFamily:"monospace", fontSize:11,
-            lineHeight:1.7, overflowX:"auto",
-          }}>
-            <div><span style={{ color:C.textMuted }}>Estado: </span>
-              <b style={{ color:C.text }}>{dbg.step ?? "—"}</b></div>
-            <div><span style={{ color:C.textMuted }}>Coords: </span>
-              <b style={{ color:C.teal }}>{dbg.coords ?? "—"}</b></div>
-            <div><span style={{ color:C.textMuted }}>Resultados: </span>
-              <b style={{ color:dbg.count > 0 ? C.teal : C.amber }}>
-                {dbg.count != null ? `${dbg.count} vets` : "—"}
-              </b>
-              {dbg.ms != null && <span style={{ color:C.textMuted }}> en {dbg.ms}ms</span>}
-            </div>
-            {dbg.error && (
-              <div style={{ color:C.red, marginTop:4 }}>❌ {dbg.error}</div>
-            )}
-            <div style={{ color:C.textMuted, marginTop:6, fontSize:10 }}>
-              API: nominatim.openstreetmap.org (Nominatim)
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Estado: cargando (lista vacía) */}

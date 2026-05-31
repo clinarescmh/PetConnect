@@ -175,30 +175,37 @@ function toStore(item, uLat, uLon) {
 // ── Fetchers públicos ─────────────────────────────────────────────────────────
 
 /**
- * Busca veterinarias usando amenity=veterinary (tag OSM oficial).
- * Intenta bounding box 10 km, expande a 25 km si no hay resultados.
+ * Busca veterinarias con texto libre — más tolerante que amenity=veterinary.
+ * Intenta múltiples términos y radio creciente hasta cubrir la RM completa.
  */
 export async function fetchNearbyVets(lat, lon) {
   console.log('[nominatim] fetchNearbyVets', lat.toFixed(4), lon.toFixed(4))
   const ctrl = new AbortController()
-  const safety = setTimeout(() => ctrl.abort(), 20_000)
+  const safety = setTimeout(() => ctrl.abort(), 25_000)
+
+  // Bounding box de la Región Metropolitana completa
+  const RM_BBOX = '-71.2,-33.0,-70.0,-34.0'
+
+  const queries = [
+    { q: 'veterinaria',                    viewbox: makeBbox(lat, lon, 15), bounded: '0' },
+    { q: 'clinica veterinaria',            viewbox: makeBbox(lat, lon, 20), bounded: '0' },
+    { q: 'veterinaria santiago',           viewbox: RM_BBOX,                bounded: '0' },
+    { q: 'clinica veterinaria santiago chile' },
+  ]
 
   try {
-    for (const km of [10, 25]) {
+    for (const params of queries) {
       try {
-        const items = await searchNominatim(
-          { amenity: 'veterinary', viewbox: makeBbox(lat, lon, km), bounded: '1' },
-          ctrl.signal
-        )
-        console.log('[nominatim] vets encontradas:', items.length, `(radio ${km}km)`)
-        const results = items.map(i => toVet(i, lat, lon))
-          .filter(Boolean)
+        const items = await searchNominatim(params, ctrl.signal)
+        console.log('[nominatim] vets q="' + params.q + '":', items.length)
+        const results = items.map(i => toVet(i, lat, lon)).filter(Boolean)
           .sort((a, b) => a.distanceKm - b.distanceKm)
         if (results.length > 0) { clearTimeout(safety); return results }
       } catch (err) {
         if (err?.name === 'AbortError') throw err
-        console.warn('[nominatim] vets error en radio', km, ':', err?.message)
+        console.warn('[nominatim] vets error q="' + params.q + '":', err?.message)
       }
+      await new Promise(r => setTimeout(r, 400))
     }
   } finally {
     clearTimeout(safety)
