@@ -447,9 +447,9 @@ const mockProducts = [
   { id:4, name:"Juguete Kong XL",            price:8990,  icon:"🎾", rating:4.7, sold:412 },
 ];
 const mockWalkers = [
-  { id:1, name:"Camila Torres", avatar:"👩‍🦱", rating:4.9, reviews:87, distance:"0.4 km", price:8000, services:["Paseos","Guardería"],       verified:true,  available:true,  badge:"Top"  },
-  { id:2, name:"Rodrigo Soto",  avatar:"👨‍🦲", rating:4.7, reviews:52, distance:"0.9 km", price:7500, services:["Paseos","Cuidado en casa"], verified:true,  available:true,  badge:null   },
-  { id:3, name:"Valentina M.",  avatar:"👩‍🦰", rating:4.8, reviews:34, distance:"1.3 km", price:9000, services:["Guardería","Alojamiento"],  verified:true,  available:false, badge:"Nuevo"},
+  { id:1, name:"Camila Torres", avatar:"👩‍🦱", photo:"/Golden_retriever.jpeg", rating:4.9, reviews:87, distance:"0.4 km", price:8000, services:["Paseos","Guardería"],       verified:true,  available:true,  badge:"Top"  },
+  { id:2, name:"Rodrigo Soto",  avatar:"👨‍🦲", photo:"/Labrador.jpeg",          rating:4.7, reviews:52, distance:"0.9 km", price:7500, services:["Paseos","Cuidado en casa"], verified:true,  available:true,  badge:null   },
+  { id:3, name:"Valentina M.",  avatar:"👩‍🦰", photo:"/Beagle.jpeg",            rating:4.8, reviews:34, distance:"1.3 km", price:9000, services:["Guardería","Alojamiento"],  verified:true,  available:false, badge:"Nuevo"},
 ];
 const mockHealthRecords = [
   { id:1, title:"Vacuna Séxtuple",         date:"15 Mar 2025", next:"15 Mar 2026", icon:"💉", status:"ok"      },
@@ -458,13 +458,13 @@ const mockHealthRecords = [
   { id:4, title:"Antirrábica",             date:"20 Nov 2024", next:"20 Nov 2025", icon:"💉", status:"soon"    },
 ];
 const mockLostPets = [
-  { id:1, name:"Firulais", breed:"Mestizo",     avatar:"🐕", zone:"Las Condes",  time_seen:"Hoy 09:30",  contact:"+56 9 1234 5678", reward:true,  description:"Collar azul, responde a su nombre" },
-  { id:2, name:"Michi",    breed:"Gato Siamés", avatar:"🐈", zone:"Providencia", time_seen:"Ayer 18:00", contact:"+56 9 8765 4321", reward:false, description:"Ojos azules, sin collar"            },
+  { id:1, name:"Firulais", breed:"Mestizo",     avatar:"🐕", photo:"/Beagle.jpeg",      zone:"Las Condes",  time_seen:"Hoy 09:30",  contact:"+56 9 1234 5678", reward:true,  description:"Collar azul, responde a su nombre" },
+  { id:2, name:"Michi",    breed:"Gato Siamés", avatar:"🐈", photo:"/Gato_persa.jpeg",  zone:"Providencia", time_seen:"Ayer 18:00", contact:"+56 9 8765 4321", reward:false, description:"Ojos azules, sin collar"            },
 ];
 const mockAdoption = [
-  { id:1, name:"Pancho", species:"Perro", breed:"Mestizo",     age:"2 años", gender:"Macho",  avatar:"🐕", org:"Refugio Huellitas",  zone:"Maipú",      vaccinated:true,  castrated:true,  description:"Súper cariñoso, bueno con niños y otros perros.", urgent:false },
-  { id:2, name:"Nube",   species:"Gato",  breed:"Angora mix",  age:"1 año",  gender:"Hembra", avatar:"🐈", org:"ONG PatitasFelices", zone:"Ñuñoa",      vaccinated:true,  castrated:true,  description:"Tranquila y muy mimosa. Ideal para departamento.", urgent:true  },
-  { id:3, name:"Rocky",  species:"Perro", breed:"Pitbull mix", age:"4 años", gender:"Macho",  avatar:"🐶", org:"Particular",         zone:"La Florida", vaccinated:true,  castrated:false, description:"Dueño viaja al extranjero. Muy leal y obediente.",  urgent:true  },
+  { id:1, name:"Pancho", species:"Perro", breed:"Mestizo",     age:"2 años", gender:"Macho",  avatar:"🐕", photo:"/Labrador.jpeg",         org:"Refugio Huellitas",  zone:"Maipú",      vaccinated:true,  castrated:true,  description:"Súper cariñoso, bueno con niños y otros perros.", urgent:false },
+  { id:2, name:"Nube",   species:"Gato",  breed:"Angora mix",  age:"1 año",  gender:"Hembra", avatar:"🐈", photo:"/Gato_persa.jpeg",       org:"ONG PatitasFelices", zone:"Ñuñoa",      vaccinated:true,  castrated:true,  description:"Tranquila y muy mimosa. Ideal para departamento.", urgent:true  },
+  { id:3, name:"Rocky",  species:"Perro", breed:"Pitbull mix", age:"4 años", gender:"Macho",  avatar:"🐶", photo:"/Beagle.jpeg",           org:"Particular",         zone:"La Florida", vaccinated:true,  castrated:false, description:"Dueño viaja al extranjero. Muy leal y obediente.",  urgent:true  },
 ];
 const mockLodging = [
   { id:1, name:"Casa PetFriendly de Ana", host:"Ana Martínez",   avatar:"👩‍🦳", rating:4.9, reviews:63,  price:20000, zone:"Providencia", capacity:"Hasta 2 perros medianos", amenities:["Jardín","Cámara 24h","Fotos diarias"],         available:true,  badge:"Superhost" },
@@ -505,15 +505,25 @@ function Btn({ label, onClick, variant = "primary", color, small }) {
   );
 }
 
-function Avatar({ emoji, size = 44, color, ring }) {
+function Avatar({ emoji, size = 44, color, ring, photo }) {
   const { C } = useTheme();
   const bg = color ?? C.bgElevated;
+  const shadow = ring ? `0 0 0 2px ${C.bg}, 0 0 0 3.5px ${ring}` : "none";
+  const radius = size * 0.35;
+
+  if (photo) {
+    return (
+      <div style={{ width:size, height:size, borderRadius:radius, overflow:"hidden",
+        flexShrink:0, boxShadow:shadow }}>
+        <img src={photo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+      </div>
+    );
+  }
   return (
     <div style={{
-      width: size, height: size, borderRadius: size * 0.35,
+      width: size, height: size, borderRadius: radius,
       background: bg, display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.52, flexShrink: 0,
-      boxShadow: ring ? `0 0 0 2px ${C.bg}, 0 0 0 3.5px ${ring}` : "none",
+      fontSize: size * 0.52, flexShrink: 0, boxShadow: shadow,
     }}>{emoji}</div>
   );
 }
@@ -759,6 +769,12 @@ function Stories() {
 function PostCard({ post }) {
   const { C } = useTheme();
   const [liked, setLiked] = useState(false);
+  const [burst, setBurst] = useState(false);
+
+  const handleLike = () => {
+    if (!liked) { setBurst(true); setTimeout(() => setBurst(false), 700); }
+    setLiked(l => !l);
+  };
   const postColors = ["#C8F04D", "#F055A3", "#4A9EFF", "#9B6EF5", "#2DD4BF"];
   const bg = postColors[post.id % postColors.length];
   return (
@@ -800,9 +816,22 @@ function PostCard({ post }) {
         <span style={{ fontFamily:F.body, fontSize:13, color:C.accent }}>{post.tag}</span>
       </div>
       <div style={{ display:"flex", alignItems:"center", padding:"10px 14px 14px", gap:4 }}>
-        <button onClick={() => setLiked(!liked)} style={{ display:"flex", alignItems:"center", gap:6, background: liked ? C.pink + "18" : C.bgElevated, border:`1px solid ${liked ? C.pink + "44" : C.border}`, borderRadius:12, padding:"7px 14px", cursor:"pointer", transition:"all 0.2s" }}>
-          <span style={{ fontSize:14 }}>{liked ? "❤️" : "🤍"}</span>
-          <span style={{ fontFamily:F.body, fontSize:12, fontWeight:600, color: liked ? C.pink : C.textSub }}>{post.likes + (liked ? 1 : 0)}</span>
+        <button onClick={handleLike} style={{ display:"flex", alignItems:"center", gap:6,
+          background: liked ? C.pink + "18" : C.bgElevated,
+          border:`1px solid ${liked ? C.pink + "44" : C.border}`,
+          borderRadius:12, padding:"7px 14px", cursor:"pointer",
+          transition:"background 0.2s, border-color 0.2s",
+          position:"relative", overflow:"visible" }}>
+          {/* Anillo de explosión */}
+          {burst && <span style={{ position:"absolute", inset:0, borderRadius:12,
+            border:`2px solid ${C.pink}`, animation:"heart-ring 0.6s ease forwards",
+            pointerEvents:"none" }} />}
+          <span style={{ fontSize:14, display:"inline-block",
+            animation: burst ? "heart-pop 0.6s ease" : "none" }}>
+            {liked ? "❤️" : "🤍"}
+          </span>
+          <span style={{ fontFamily:F.body, fontSize:12, fontWeight:600,
+            color: liked ? C.pink : C.textSub }}>{post.likes + (liked ? 1 : 0)}</span>
         </button>
         <button style={{ display:"flex", alignItems:"center", gap:6, background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:12, padding:"7px 14px", cursor:"pointer" }}>
           <span style={{ fontSize:14 }}>💬</span>
@@ -889,7 +918,7 @@ function WalkersTab({ onRegisterWalker }) {
         <div key={w.id} style={{ ...makeCard(C), padding:"16px", marginBottom:12 }}>
           <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
             <div style={{ position:"relative" }}>
-              <Avatar emoji={w.avatar} size={54} color={C.bgElevated} />
+              <Avatar emoji={w.avatar} photo={w.photo} size={54} color={C.bgElevated} />
               {w.badge && <div style={{ position:"absolute", top:-6, right:-6, background: w.badge==="Top" ? C.accent : C.blue, borderRadius:8, padding:"2px 7px", fontFamily:F.body, fontSize:9, fontWeight:700, color: w.badge==="Top" ? C.bg : "#fff" }}>{w.badge}</div>}
             </div>
             <div style={{ flex:1 }}>
@@ -1043,7 +1072,7 @@ function LostTab() {
         loading ? <LoadingRows count={2} /> : lostPets.map(p => (
           <div key={p.id} style={{ ...makeCard(C, { border:`1px solid ${C.red}33` }), padding:"16px", marginBottom:12 }}>
             <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-              <Avatar emoji={p.avatar} size={56} color={C.red + "18"} />
+              <Avatar emoji={p.avatar} photo={p.photo} size={56} color={C.red + "18"} />
               <div style={{ flex:1 }}>
                 <div style={{ fontFamily:F.display, fontWeight:800, fontSize:16, color:C.text }}>{p.name}</div>
                 <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub }}>{p.breed}</div>
@@ -1110,10 +1139,17 @@ function AdoptionTab() {
       <div style={{ marginBottom:16 }}><FilterRow items={["Todos","Perros","Gatos","Urgente"]} active={filter} setActive={setFilter} color={C.purple} /></div>
       {loading ? <LoadingRows count={3} /> : filtered.map(p => (
         <div key={p.id} style={{ ...makeCard(C, { border: p.urgent ? `1px solid ${C.red}44` : `1px solid ${C.border}` }), marginBottom:14 }}>
-          <div style={{ height:140, background:`linear-gradient(135deg, ${C.purple}18, ${C.purple}06)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:76, position:"relative" }}>
-            {p.avatar}
+          <div style={{ height:180, position:"relative", overflow:"hidden",
+            background:`linear-gradient(135deg, ${C.purple}18, ${C.purple}06)` }}>
+            {p.photo ? (
+              <img src={p.photo} alt={p.name}
+                style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+            ) : (
+              <div style={{ height:"100%", display:"flex", alignItems:"center",
+                justifyContent:"center", fontSize:76 }}>{p.avatar}</div>
+            )}
             {p.urgent && <div style={{ position:"absolute", top:10, left:10, background:C.red, borderRadius:10, padding:"4px 10px", fontFamily:F.body, fontSize:11, fontWeight:700, color:"#fff" }}>🚨 URGENTE</div>}
-            <div style={{ position:"absolute", top:10, right:10, background:C.bgCard + "cc", backdropFilter:"blur(8px)", borderRadius:10, padding:"4px 10px", fontFamily:F.body, fontSize:11, fontWeight:600, color:C.textSub, border:`1px solid ${C.border}` }}>{p.age} · {p.gender}</div>
+            <div style={{ position:"absolute", top:10, right:10, background:"rgba(0,0,0,0.45)", backdropFilter:"blur(8px)", borderRadius:10, padding:"4px 10px", fontFamily:F.body, fontSize:11, fontWeight:600, color:"#fff", border:`1px solid rgba(255,255,255,0.2)` }}>{p.age} · {p.gender}</div>
           </div>
           <div style={{ padding:"14px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
@@ -1461,10 +1497,11 @@ function VetsTab() {
                     ? <Btn label="📞 Llamar" small color={C.accent}
                         onClick={() => window.open(`tel:${v.phone}`)} />
                     : <Btn label="📅 Cita" small variant="ghost" />}
-                  {v.mapsUrl && (
-                    <Btn label="🗺 Ver" small variant="ghost"
-                      onClick={() => window.open(v.mapsUrl, "_blank")} />
-                  )}
+                  <Btn label="🗺 Ver" small variant="ghost"
+                    onClick={() => window.open(
+                      v.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((v.name ?? "veterinaria") + " Santiago Chile")}`,
+                      "_blank"
+                    )} />
                 </div>
               </div>
             </div>
@@ -1656,11 +1693,11 @@ function StoresTab() {
                   )}
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
-                  {isOSMReal && s.mapsUrl
-                    ? <Btn label="🗺 Ver" small color={C.teal}
-                        onClick={() => window.open(s.mapsUrl, "_blank")} />
-                    : <Btn label="Ver →" small color={C.teal} />
-                  }
+                  <Btn label="🗺 Ver" small color={C.teal}
+                    onClick={() => window.open(
+                      s.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((s.name ?? "tienda mascotas") + " Santiago Chile")}`,
+                      "_blank"
+                    )} />
                   {s.phone && (
                     <Btn label="📞" small variant="ghost"
                       onClick={() => window.open(`tel:${s.phone}`)} />
@@ -1810,7 +1847,21 @@ export default function PetConnect({ isDark, toggleTheme }) {
         </div>
       )}
       <div style={{ maxWidth:420, margin:"0 auto", background:C.bg, minHeight:"100vh", display:"flex", flexDirection:"column" }}>
-        <style>{`* { box-sizing: border-box; } body { margin: 0; background: ${C.bg}; } input::placeholder { color: ${C.textMuted}; }`}</style>
+        <style>{`
+          * { box-sizing: border-box; }
+          body { margin: 0; background: ${C.bg}; }
+          input::placeholder { color: ${C.textMuted}; }
+          @keyframes heart-pop {
+            0%   { transform: scale(1);    }
+            35%  { transform: scale(1.65); }
+            65%  { transform: scale(0.88); }
+            100% { transform: scale(1);    }
+          }
+          @keyframes heart-ring {
+            0%   { opacity: .7; transform: scale(1);   }
+            100% { opacity: 0;  transform: scale(2.4); }
+          }
+        `}</style>
         {/* ── Zona sticky: Header + QuickNav siempre visibles ── */}
         <div style={{ position:"sticky", top:0, zIndex:50, background:C.bg, flexShrink:0 }}>
           <Header
