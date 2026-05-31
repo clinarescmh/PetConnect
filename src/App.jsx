@@ -467,7 +467,7 @@ function FilterRow({ items, active, setActive, color }) {
 
 /* ── NavBar ── */
 function NavBar({ active, setActive, notifCount }) {
-  const { C } = useTheme();
+  const { C, isDark } = useTheme();
   const tabs = [
     { id:"feed",    emoji:"⌂",  label:"Inicio"   },
     { id:"walkers", emoji:"🦮", label:"Paseos"   },
@@ -476,7 +476,19 @@ function NavBar({ active, setActive, notifCount }) {
     { id:"more",    emoji:"⋯",  label:"Más"      },
   ];
   return (
-    <div style={{ display:"flex", background:C.bgCard, borderTop:`1px solid ${C.border}`, padding:"10px 0 16px", position:"sticky", bottom:0, zIndex:100 }}>
+    <div style={{
+      position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
+      width:"calc(100% - 32px)", maxWidth:"calc(420px - 32px)",
+      margin:"0 16px 16px",
+      display:"flex",
+      background: isDark ? "rgba(19,34,64,0.75)" : "rgba(255,255,255,0.75)",
+      backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
+      borderRadius:24,
+      border:`1px solid ${C.borderHi}`,
+      boxShadow:"0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.18)",
+      padding:"10px 8px 12px",
+      zIndex:100,
+    }}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => setActive(t.id)} style={{
           flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4,
@@ -491,7 +503,7 @@ function NavBar({ active, setActive, notifCount }) {
           }}>
             {t.emoji}
             {t.id === "feed" && notifCount > 0 && (
-              <span style={{ position:"absolute", top:-4, right:-4, background:C.red, width:14, height:14, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color:"#fff", fontWeight:700, border:`2px solid ${C.bgCard}` }}>{notifCount}</span>
+              <span style={{ position:"absolute", top:-4, right:-4, background:C.red, width:14, height:14, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color:"#fff", fontWeight:700, border:`2px solid transparent` }}>{notifCount}</span>
             )}
           </div>
           <span style={{ fontFamily:F.body, fontSize:10, fontWeight:500, color: active === t.id ? C.accent : C.textSub }}>{t.label}</span>
@@ -1457,7 +1469,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
           onNotif={() => { setShowNotif(!showNotif); setSubTab(null); }}
           unread={unreadCount}
         />
-        <div style={{ flex:1, overflowY:"auto", paddingBottom:80 }}>
+        <div style={{ flex:1, overflowY:"auto", paddingBottom:100 }}>
           <TabErrorBoundary key={currentTab}>
             {content[currentTab]}
           </TabErrorBoundary>
