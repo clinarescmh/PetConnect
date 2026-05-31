@@ -817,7 +817,10 @@ function PostCard({ post }) {
 
 function FeedTab() {
   const { C } = useTheme();
-  const { data: posts, loading } = useData("posts", mockPets);
+  // Las fotos son archivos locales en /public — no depende de Supabase.
+  // Cuando el feed tenga posts reales con foto_url en Supabase, cambiar aquí.
+  const posts   = mockPets;
+  const loading = false;
   return (
     <div>
       <div style={{ margin:"14px 16px", background:`linear-gradient(135deg, ${C.accent}18, ${C.accent}06)`, border:`1px solid ${C.accent}33`, borderRadius:16, padding:"14px 16px", display:"flex", alignItems:"center", gap:12 }}>
