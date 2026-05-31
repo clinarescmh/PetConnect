@@ -6,7 +6,7 @@ import LoginScreen from './LoginScreen.jsx'
 
 function Root() {
   const [authenticated, setAuthenticated] = useState(false)
-  const [isDark, setIsDark] = useState(true)
+  const [isDark, setIsDark] = useState(false)
   const toggleTheme = () => setIsDark(v => !v)
 
   if (!authenticated) {

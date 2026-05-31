@@ -1101,23 +1101,71 @@ function MoreTab({ onNavigate, onRegisterBusiness }) {
 /* ── Sub-tabs ── */
 function VetsTab() {
   const { C } = useTheme();
-  const { data: bizVets, loading: loadingBiz } = useBusinesses("veterinaria");
-  const { data: osmVets, loading: loadingOSM, locationSource } = useOverpassData(fetchNearbyVets, mockVets);
-  const loading = loadingBiz || loadingOSM;
   const [search, setSearch] = useState("");
 
-  const urgent = osmVets.filter(v => v.urgent);
+  // ── Estado siempre inicializado con mock data ──────────────────────────────
+  // La tab NUNCA bloquea en loading ni arroja variables indefinidas.
+  // Overpass y Supabase son mejoras en background; si fallan, se queda el mock.
+  const [osmVets, setOsmVets]         = useState(mockVets);
+  const [bizVets, setBizVets]         = useState([]);
+  const [locationSource, setLocSrc]   = useState(null);
+  const [osmLoading, setOsmLoading]   = useState(false);
+
+  // Supabase businesses — silent fail, no bloquea render
+  useEffect(() => {
+    supabase.from("businesses").select("*")
+      .eq("active", true).eq("categoria", "veterinaria")
+      .then(({ data: rows, error }) => {
+        if (!error && Array.isArray(rows) && rows.length > 0) {
+          const ord = { premium: 0, basic: 1, free: 2 };
+          setBizVets([...rows].sort((a, b) => (ord[a.plan] ?? 3) - (ord[b.plan] ?? 3)));
+        }
+      })
+      .catch(() => {}); // tabla puede no existir aún
+  }, []);
+
+  // Overpass — se carga en background, mock data visible de inmediato
+  useEffect(() => {
+    let cancelled = false;
+    const FALLBACK = { lat: -33.4569, lon: -70.6483, source: "default" };
+    const safety = setTimeout(() => { if (!cancelled) setOsmLoading(false); }, 20_000);
+
+    setOsmLoading(true);
+    (async () => {
+      try {
+        const loc = await getLocation().catch(() => FALLBACK);
+        if (cancelled) return;
+        setLocSrc(loc.source ?? "default");
+
+        const results = await fetchNearbyVets(loc.lat, loc.lon).catch(() => []);
+        if (cancelled) return;
+
+        if (Array.isArray(results) && results.length > 0) setOsmVets(results);
+      } catch {
+        // silencio — osmVets ya tiene mockVets
+      } finally {
+        clearTimeout(safety);
+        if (!cancelled) setOsmLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; clearTimeout(safety); };
+  }, []);
+
+  // Filtros — siempre arrays, optional chaining para seguridad
+  const urgent      = osmVets.filter(v => v?.urgent);
   const filteredBiz = bizVets.filter(b =>
-    !search || b.nombre.toLowerCase().includes(search.toLowerCase())
+    !search || (b?.nombre ?? "").toLowerCase().includes(search.toLowerCase())
   );
   const filteredOSM = osmVets.filter(v =>
-    !search || v.name.toLowerCase().includes(search.toLowerCase())
+    !search || (v?.name ?? "").toLowerCase().includes(search.toLowerCase())
   );
+  const isOSMReal = osmVets !== mockVets;
 
   return (
     <div style={{ padding:"16px" }}>
 
-      {/* Banner de ubicación */}
+      {/* Banner ubicación */}
       {locationSource && (
         <div style={{
           background: locationSource === "gps" ? `${C.teal}18` : `${C.amber}18`,
@@ -1129,20 +1177,21 @@ function VetsTab() {
           <span style={{ fontFamily: F.body, fontSize: 12, fontWeight: 600,
             color: locationSource === "gps" ? C.teal : C.amber, flex: 1 }}>
             {locationSource === "gps"
-              ? `${vets.length} veterinarias encontradas cerca de ti`
+              ? `${osmVets.length} veterinarias encontradas cerca de ti`
               : "Mostrando resultados en Santiago centro — activa la ubicación para mayor precisión"}
           </span>
         </div>
       )}
 
       {/* Urgencias */}
-      <div style={{ background:C.redDim, border:`1px solid ${C.red}44`, borderRadius:18, padding:"16px", marginBottom:16, display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}>
+      <div style={{ background:C.redDim, border:`1px solid ${C.red}44`, borderRadius:18,
+        padding:"16px", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
         <div style={{ fontSize:36 }}>🚨</div>
         <div style={{ flex:1 }}>
           <div style={{ fontFamily:F.display, fontWeight:800, fontSize:17, color:C.red }}>URGENCIAS 24H</div>
           <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub, marginTop:2 }}>
-            {loading ? "Buscando..." : urgent.length > 0
-              ? `${urgent.length} con atención 24h · Toca para llamar`
+            {osmLoading ? "Buscando clínicas cerca…" :
+              urgent.length > 0 ? `${urgent.length} con atención 24h · Toca para llamar`
               : "Clínicas abiertas cerca · Toca para llamar"}
           </div>
         </div>
@@ -1152,70 +1201,82 @@ function VetsTab() {
         <SearchBar placeholder="Buscar veterinarios..." value={search} onChange={setSearch} />
       </div>
 
-      {/* Cargando */}
-      {loading && (
-        <div>
-          <div style={{ textAlign:"center", fontFamily:F.body, fontSize:12, color:C.textMuted, marginBottom:12 }}>
-            Buscando en OpenStreetMap…
-          </div>
-          <LoadingRows count={4} />
+      {/* Indicador background-loading (no bloquea render) */}
+      {osmLoading && (
+        <div style={{ textAlign:"center", fontFamily:F.body, fontSize:11, color:C.textMuted,
+          marginBottom:12, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <span style={{ opacity:0.5 }}>🔄</span> Actualizando con datos reales…
         </div>
       )}
 
-      {/* Negocios registrados (Supabase) */}
-      {!loading && filteredBiz.length > 0 && (
+      {/* Negocios registrados */}
+      {filteredBiz.length > 0 && (
         <>
           <SectionLabel label="Negocios registrados" />
           {filteredBiz.map(b => <BusinessCard key={`biz-${b.id}`} biz={b} />)}
         </>
       )}
 
-      {/* Resultados OSM */}
-      {!loading && filteredOSM.length > 0 && (
+      {/* Resultados (OSM real o mock) */}
+      {filteredOSM.length > 0 && (
         <>
-          <SectionLabel label={bizVets.length ? "Más cerca (OpenStreetMap)" : "Cerca de ti"} />
+          {filteredBiz.length > 0 && (
+            <SectionLabel label={isOSMReal ? "Más cerca (OpenStreetMap)" : "Cerca de ti"} />
+          )}
           {filteredOSM.map(v => (
-            <div key={v.id} style={{ ...makeCard(C, { border: v.urgent ? `1px solid ${C.red}44` : `1px solid ${C.border}` }), padding:"14px", marginBottom:10 }}>
+            <div key={v.id} style={{ ...makeCard(C, { border: v.urgent ? `1px solid ${C.red}44` : `1px solid ${C.border}` }),
+              padding:"14px", marginBottom:10 }}>
               <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-                <Avatar emoji={v.urgent ? "🚨" : "🏥"} size={48} color={v.urgent ? C.red + "18" : C.bgElevated} />
+                <Avatar emoji={v.urgent ? "🚨" : "🏥"} size={48}
+                  color={v.urgent ? C.red + "18" : C.bgElevated} />
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:F.body, fontWeight:600, fontSize:14, color:C.text }}>{v.name}</div>
+                  <div style={{ fontFamily:F.body, fontWeight:600, fontSize:14, color:C.text }}>
+                    {v.name ?? "Veterinaria"}
+                  </div>
                   <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub, marginTop:2 }}>
-                    {v.specialty} · {v.distance}
+                    {v.specialty ?? "General"}{v.distance ? ` · ${v.distance}` : ""}
                   </div>
                   {v.address && (
                     <div style={{ fontFamily:F.body, fontSize:10, color:C.textMuted, marginTop:3,
-                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{v.address}</div>
+                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {v.address}
+                    </div>
                   )}
-                  <div style={{ fontFamily:F.body, fontSize:11, color: v.urgent ? C.red : C.teal,
-                    fontWeight:600, marginTop:4 }}>
+                  <div style={{ fontFamily:F.body, fontSize:11,
+                    color: v.urgent ? C.red : C.teal, fontWeight:600, marginTop:4 }}>
                     {v.urgent ? "● Abierto 24h" : "● Abierto"}
                   </div>
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
                   {v.phone
-                    ? <Btn label="📞 Llamar" small color={C.accent} onClick={() => window.open(`tel:${v.phone}`)} />
-                    : <Btn label="📅 Cita" small variant="ghost" />
-                  }
-                  <Btn label="🗺 Ver" small variant="ghost" onClick={() => window.open(v.mapsUrl, "_blank")} />
+                    ? <Btn label="📞 Llamar" small color={C.accent}
+                        onClick={() => window.open(`tel:${v.phone}`)} />
+                    : <Btn label="📅 Cita" small variant="ghost" />}
+                  {v.mapsUrl && (
+                    <Btn label="🗺 Ver" small variant="ghost"
+                      onClick={() => window.open(v.mapsUrl, "_blank")} />
+                  )}
                 </div>
               </div>
             </div>
           ))}
-          <div style={{ textAlign:"center", padding:"4px 0 8px" }}>
-            <span style={{ fontFamily:F.body, fontSize:10, color:C.textMuted }}>
-              Datos OSM: © OpenStreetMap contributors
-            </span>
-          </div>
+          {isOSMReal && (
+            <div style={{ textAlign:"center", padding:"4px 0 8px" }}>
+              <span style={{ fontFamily:F.body, fontSize:10, color:C.textMuted }}>
+                Datos OSM: © OpenStreetMap contributors
+              </span>
+            </div>
+          )}
         </>
       )}
 
-      {/* Sin resultados */}
-      {!loading && filteredBiz.length === 0 && filteredOSM.length === 0 && (
-        <div style={{ ...makeCard(C), padding:"32px", textAlign:"center" }}>
-          <div style={{ fontSize:48 }}>🔍</div>
-          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:16, color:C.textSub, marginTop:12 }}>
-            {search ? `Sin resultados para "${search}"` : "No se encontraron veterinarias cercanas"}
+      {/* Sin resultados (solo si búsqueda activa) */}
+      {search && filteredBiz.length === 0 && filteredOSM.length === 0 && (
+        <div style={{ ...makeCard(C), padding:"28px", textAlign:"center" }}>
+          <div style={{ fontSize:42 }}>🔍</div>
+          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:15,
+            color:C.textSub, marginTop:10 }}>
+            Sin resultados para "{search}"
           </div>
         </div>
       )}
@@ -1223,28 +1284,74 @@ function VetsTab() {
   );
 }
 
-const STORE_FILTERS = ["Todos", "Tienda", "Grooming", "Acuarios", "Mock"];
+const STORE_FILTERS = ["Todos", "Tienda", "Grooming", "Acuarios"];
 
 function StoresTab() {
   const { C } = useTheme();
-  const { data: bizStores, loading: loadingBiz } = useBusinesses(["tienda","farmacia","grooming","alojamiento"]);
-  const { data: osmStores, loading: loadingOSM, locationSource } = useOverpassData(fetchNearbyPetShops, mockStores);
-  const loading = loadingBiz || loadingOSM;
   const [cat, setCat]     = useState("Todos");
   const [search, setSearch] = useState("");
 
-  const isRealOSM = osmStores !== mockStores;
+  // ── Estado siempre inicializado con mock data ──────────────────────────────
+  const [osmStores, setOsmStores]   = useState(mockStores);
+  const [bizStores, setBizStores]   = useState([]);
+  const [locationSource, setLocSrc] = useState(null);
+  const [osmLoading, setOsmLoading] = useState(false);
 
-  const filteredBizStores = bizStores.filter(b =>
-    !search || b.nombre.toLowerCase().includes(search.toLowerCase())
+  // Supabase businesses — silent fail
+  useEffect(() => {
+    supabase.from("businesses").select("*")
+      .eq("active", true)
+      .in("categoria", ["tienda", "farmacia", "grooming", "alojamiento"])
+      .then(({ data: rows, error }) => {
+        if (!error && Array.isArray(rows) && rows.length > 0) {
+          const ord = { premium: 0, basic: 1, free: 2 };
+          setBizStores([...rows].sort((a, b) => (ord[a.plan] ?? 3) - (ord[b.plan] ?? 3)));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Overpass — background, mock visible de inmediato
+  useEffect(() => {
+    let cancelled = false;
+    const FALLBACK = { lat: -33.4569, lon: -70.6483, source: "default" };
+    const safety = setTimeout(() => { if (!cancelled) setOsmLoading(false); }, 20_000);
+
+    setOsmLoading(true);
+    (async () => {
+      try {
+        const loc = await getLocation().catch(() => FALLBACK);
+        if (cancelled) return;
+        setLocSrc(loc.source ?? "default");
+
+        const results = await fetchNearbyPetShops(loc.lat, loc.lon).catch(() => []);
+        if (cancelled) return;
+
+        if (Array.isArray(results) && results.length > 0) setOsmStores(results);
+      } catch {
+        // silencio — osmStores ya tiene mockStores
+      } finally {
+        clearTimeout(safety);
+        if (!cancelled) setOsmLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; clearTimeout(safety); };
+  }, []);
+
+  const isOSMReal = osmStores !== mockStores;
+
+  const filteredBiz = bizStores.filter(b =>
+    !search || (b?.nombre ?? "").toLowerCase().includes(search.toLowerCase())
   );
   const filteredOSM = osmStores.filter(s => {
-    const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || (s?.name ?? "").toLowerCase().includes(search.toLowerCase());
+    const type = s?.type ?? "";
     const matchCat =
-      cat === "Todos"   ? true :
-      cat === "Tienda"  ? (s.type || "").includes("mascota") || (s.type || "").includes("Animal") || (s.type || "").includes("Alimento") :
-      cat === "Grooming"? (s.type || "").includes("room") :
-      cat === "Acuarios"? (s.type || "").includes("cua") :
+      cat === "Todos"    ? true :
+      cat === "Tienda"   ? type.includes("mascota") || type.includes("Animal") || type.includes("Alimento") :
+      cat === "Grooming" ? type.includes("room") :
+      cat === "Acuarios" ? type.includes("cua") :
       true;
     return matchSearch && matchCat;
   });
@@ -1252,8 +1359,8 @@ function StoresTab() {
   return (
     <div style={{ padding:"16px" }}>
 
-      {/* Banner de ubicación */}
-      {locationSource && isReal && (
+      {/* Banner ubicación */}
+      {locationSource && isOSMReal && (
         <div style={{
           background: locationSource === "gps" ? `${C.teal}18` : `${C.amber}18`,
           border: `1px solid ${locationSource === "gps" ? C.teal : C.amber}44`,
@@ -1264,7 +1371,7 @@ function StoresTab() {
           <span style={{ fontFamily: F.body, fontSize: 12, fontWeight: 600,
             color: locationSource === "gps" ? C.teal : C.amber, flex: 1 }}>
             {locationSource === "gps"
-              ? `${stores.length} tiendas encontradas cerca de ti`
+              ? `${osmStores.length} tiendas encontradas cerca de ti`
               : "Mostrando resultados en Santiago centro — activa la ubicación para mayor precisión"}
           </span>
         </div>
@@ -1278,51 +1385,62 @@ function StoresTab() {
         <FilterRow items={STORE_FILTERS} active={cat} setActive={setCat} color={C.teal} />
       </div>
 
-      {/* Cargando */}
-      {loading && (
-        <div>
-          <div style={{ textAlign:"center", fontFamily:F.body, fontSize:12, color:C.textMuted, marginBottom:12 }}>
-            Buscando en OpenStreetMap…
-          </div>
-          <LoadingRows count={4} />
+      {/* Indicador background-loading */}
+      {osmLoading && (
+        <div style={{ textAlign:"center", fontFamily:F.body, fontSize:11, color:C.textMuted,
+          marginBottom:12, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <span style={{ opacity:0.5 }}>🔄</span> Actualizando con datos reales…
         </div>
       )}
 
-      {/* Negocios registrados (Supabase) */}
-      {!loading && filteredBizStores.length > 0 && (
+      {/* Negocios registrados */}
+      {filteredBiz.length > 0 && (
         <>
           <SectionLabel label="Negocios registrados" />
-          {filteredBizStores.map(b => <BusinessCard key={`biz-${b.id}`} biz={b} />)}
+          {filteredBiz.map(b => <BusinessCard key={`biz-${b.id}`} biz={b} />)}
         </>
       )}
 
-      {/* OSM */}
-      {!loading && filteredOSM.length > 0 && (
+      {/* Resultados OSM o mock */}
+      {filteredOSM.length > 0 && (
         <>
-          <SectionLabel label={bizStores.length ? "Más cerca (OpenStreetMap)" : "Cerca de ti"} />
+          {filteredBiz.length > 0 && (
+            <SectionLabel label={isOSMReal ? "Más cerca (OpenStreetMap)" : "Cerca de ti"} />
+          )}
           {filteredOSM.map(s => (
             <div key={s.id} style={{ ...makeCard(C), padding:"14px", marginBottom:10 }}>
               <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                <Avatar emoji={s.icon} size={50} color={C.teal + "18"} />
+                <Avatar emoji={s.icon ?? "🐾"} size={50} color={C.teal + "18"} />
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:F.body, fontWeight:600, fontSize:14, color:C.text }}>{s.name}</div>
-                  <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub }}>{s.type} · {s.distance}</div>
+                  <div style={{ fontFamily:F.body, fontWeight:600, fontSize:14, color:C.text }}>
+                    {s.name ?? "Tienda"}
+                  </div>
+                  <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub }}>
+                    {s.type ?? "Productos para mascotas"}
+                    {s.distance ? ` · ${s.distance}` : ""}
+                  </div>
                   {s.address && (
                     <div style={{ fontFamily:F.body, fontSize:10, color:C.textMuted, marginTop:2,
-                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.address}</div>
+                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {s.address}
+                    </div>
                   )}
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
-                  {isRealOSM
-                    ? <Btn label="🗺 Ver" small color={C.teal} onClick={() => window.open(s.mapsUrl, "_blank")} />
+                  {isOSMReal && s.mapsUrl
+                    ? <Btn label="🗺 Ver" small color={C.teal}
+                        onClick={() => window.open(s.mapsUrl, "_blank")} />
                     : <Btn label="Ver →" small color={C.teal} />
                   }
-                  {s.phone && <Btn label="📞" small variant="ghost" onClick={() => window.open(`tel:${s.phone}`)} />}
+                  {s.phone && (
+                    <Btn label="📞" small variant="ghost"
+                      onClick={() => window.open(`tel:${s.phone}`)} />
+                  )}
                 </div>
               </div>
             </div>
           ))}
-          {isRealOSM && (
+          {isOSMReal && (
             <div style={{ textAlign:"center", padding:"4px 0 8px" }}>
               <span style={{ fontFamily:F.body, fontSize:10, color:C.textMuted }}>
                 Datos OSM: © OpenStreetMap contributors
@@ -1332,12 +1450,13 @@ function StoresTab() {
         </>
       )}
 
-      {/* Sin resultados */}
-      {!loading && filteredBizStores.length === 0 && filteredOSM.length === 0 && (
-        <div style={{ ...makeCard(C), padding:"32px", textAlign:"center" }}>
-          <div style={{ fontSize:48 }}>🔍</div>
-          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:16, color:C.textSub, marginTop:12 }}>
-            {search ? `Sin resultados para "${search}"` : "No se encontraron tiendas cercanas"}
+      {/* Sin resultados solo si hay búsqueda activa */}
+      {search && filteredBiz.length === 0 && filteredOSM.length === 0 && (
+        <div style={{ ...makeCard(C), padding:"28px", textAlign:"center" }}>
+          <div style={{ fontSize:42 }}>🔍</div>
+          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:15,
+            color:C.textSub, marginTop:10 }}>
+            Sin resultados para "{search}"
           </div>
         </div>
       )}
