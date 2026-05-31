@@ -477,15 +477,17 @@ function NavBar({ active, setActive, notifCount }) {
   ];
   return (
     <div style={{
-      position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
-      width:"calc(100% - 32px)", maxWidth:"calc(420px - 32px)",
-      margin:"0 16px 16px",
+      /* Flotante: bottom fijo, centrado con left+translate sin margen lateral */
+      position:"fixed", bottom:16,
+      left:"50%", transform:"translateX(-50%)",
+      /* Ancho: llena la pantalla menos 32px de margen (16px c/lado) */
+      width:"calc(min(100vw, 420px) - 32px)",
       display:"flex",
-      background: isDark ? "rgba(19,34,64,0.75)" : "rgba(255,255,255,0.75)",
-      backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
+      background: isDark ? "rgba(19,34,64,0.82)" : "rgba(255,255,255,0.82)",
+      backdropFilter:"blur(24px)", WebkitBackdropFilter:"blur(24px)",
       borderRadius:24,
       border:`1px solid ${C.borderHi}`,
-      boxShadow:"0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.18)",
+      boxShadow:"0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.14)",
       padding:"10px 8px 12px",
       zIndex:100,
     }}>
@@ -493,7 +495,7 @@ function NavBar({ active, setActive, notifCount }) {
         <button key={t.id} onClick={() => setActive(t.id)} style={{
           flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4,
           background:"none", border:"none", cursor:"pointer",
-          opacity: active === t.id ? 1 : 0.35, transition:"all 0.15s",
+          opacity: active === t.id ? 1 : 0.65, transition:"all 0.15s",
           transform: active === t.id ? "translateY(-1px)" : "none",
         }}>
           <div style={{
@@ -509,6 +511,51 @@ function NavBar({ active, setActive, notifCount }) {
           <span style={{ fontFamily:F.body, fontSize:10, fontWeight:500, color: active === t.id ? C.accent : C.textSub }}>{t.label}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/* ── QuickNav ── */
+const QUICK_ITEMS = [
+  { id:"vets",     emoji:"🏥", label:"Vets",       mainTab:"more"    },
+  { id:"stores",   emoji:"🛒", label:"Tiendas",    mainTab:"more"    },
+  { id:"walkers",  emoji:"🦮", label:"Paseadores", mainTab:"walkers" },
+  { id:"adoption", emoji:"🏠", label:"Adopción",   mainTab:"more"    },
+  { id:"lodging",  emoji:"🏡", label:"Alojamiento",mainTab:"more"    },
+  { id:"breeding", emoji:"💕", label:"Cruzas",     mainTab:"more"    },
+  { id:"lost",     emoji:"📍", label:"Perdidos",   mainTab:"lost"    },
+];
+
+function QuickNav({ currentTab, currentSub, onNavigate }) {
+  const { C } = useTheme();
+  return (
+    <div style={{
+      display:"flex", gap:8, overflowX:"auto", padding:"9px 14px 11px",
+      scrollbarWidth:"none", msOverflowStyle:"none",
+      background: C.bg, borderBottom:`1px solid ${C.border}`,
+      WebkitOverflowScrolling:"touch",
+    }}>
+      {QUICK_ITEMS.map(item => {
+        const isActive =
+          item.mainTab === "walkers" || item.mainTab === "lost"
+            ? currentTab === item.mainTab
+            : currentSub === item.id;
+        return (
+          <button key={item.id} onClick={() => onNavigate(item)} style={{
+            flexShrink:0, display:"flex", alignItems:"center", gap:5,
+            background: isActive ? C.accent + "22" : C.bgElevated,
+            border:`1.5px solid ${isActive ? C.accent + "88" : C.border}`,
+            borderRadius:20, padding:"5px 12px 5px 10px", cursor:"pointer",
+            transition:"all 0.15s", whiteSpace:"nowrap",
+          }}>
+            <span style={{ fontSize:14 }}>{item.emoji}</span>
+            <span style={{ fontFamily:F.body, fontSize:12, fontWeight:600,
+              color: isActive ? C.accent : C.text }}>
+              {item.label}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1588,6 +1635,22 @@ export default function PetConnect({ isDark, toggleTheme }) {
           onNotif={() => { setShowNotif(!showNotif); setSubTab(null); }}
           unread={unreadCount}
         />
+        {!showNotif && (
+          <QuickNav
+            currentTab={activeTab}
+            currentSub={subTab}
+            onNavigate={item => {
+              setShowNotif(false);
+              if (item.mainTab === "walkers" || item.mainTab === "lost") {
+                setActiveTab(item.mainTab);
+                setSubTab(null);
+              } else {
+                setActiveTab("more");
+                setSubTab(item.id);
+              }
+            }}
+          />
+        )}
         <div style={{ flex:1, overflowY:"auto", paddingBottom:100 }}>
           <TabErrorBoundary key={currentTab}>
             {content[currentTab]}
