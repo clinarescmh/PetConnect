@@ -419,7 +419,7 @@ const makeCard = (C, extra = {}) => ({
 
 /* ── Mock data (fallback si Supabase no responde) ── */
 const mockPets = [
-  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿",          time_ago:"2h", tag:"#lavidacanina", photo:"/Golden_Retriever.jpeg" },
+  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿",          time_ago:"2h", tag:"#lavidacanina", photo:"/Golden_retriever.jpeg" },
   { id:2, name:"Luna",   breed:"Gata Persa",       owner:"Pedro R.", avatar:"🐈", owner_avatar:"👨", likes:267, comments:41, caption:"Reinando el balcón como siempre 👑",              time_ago:"4h", tag:"#catlife",       photo:"/Gato_persa.jpeg"       },
   { id:3, name:"Max",    breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89,  comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉",    time_ago:"6h", tag:"#perrofeliz",   photo:"/Labrador.jpeg"         },
   { id:4, name:"Bella",  breed:"Beagle",            owner:"Carlos M.",avatar:"🐕", owner_avatar:"👨", likes:98,  comments:15, caption:"¡Primera competencia de olfato! 🏆 Campeona",   time_ago:"1d", tag:"#beaglelife",   photo:"/Beagle.jpeg"           },
@@ -718,7 +718,7 @@ function Stories() {
   const { C } = useTheme();
   const items = [
     { emoji:"➕",  name:"Añadir", dim:true },
-    { photo:"/Golden_Retriever.jpeg", emoji:"🐕", name:"Tobías" },
+    { photo:"/Golden_retriever.jpeg", emoji:"🐕", name:"Tobías" },
     { photo:"/Gato_persa.jpeg",       emoji:"🐈", name:"Luna"   },
     { photo:"/Labrador.jpeg",         emoji:"🐶", name:"Max"    },
     { photo:"/Beagle.jpeg",           emoji:"🐕", name:"Thor"   },
