@@ -419,9 +419,9 @@ const makeCard = (C, extra = {}) => ({
 
 /* ── Mock data (fallback si Supabase no responde) ── */
 const mockPets = [
-  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿", time_ago:"2h", tag:"#lavidacanina" },
-  { id:2, name:"Luna",   breed:"Gata Persa",       owner:"Pedro R.", avatar:"🐈", owner_avatar:"👨", likes:267, comments:41, caption:"Reinando el balcón como siempre 👑",    time_ago:"4h", tag:"#catlife" },
-  { id:3, name:"Max",    breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89,  comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉", time_ago:"6h", tag:"#perrofeliz" },
+  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿", time_ago:"2h", tag:"#lavidacanina", photo:"/dog1.jpeg" },
+  { id:2, name:"Luna",   breed:"Gata Persa",       owner:"Pedro R.", avatar:"🐈", owner_avatar:"👨", likes:267, comments:41, caption:"Reinando el balcón como siempre 👑",    time_ago:"4h", tag:"#catlife",      photo:"/cat1.jpeg" },
+  { id:3, name:"Max",    breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89,  comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉", time_ago:"6h", tag:"#perrofeliz",  photo:"/dog2.jpeg" },
 ];
 const mockVets = [
   { id:1, name:"Clínica PetCare",  distance:"0.8 km", rating:4.8, open:true, specialty:"General",   icon:"🏥", urgent:false },
@@ -715,21 +715,38 @@ function NotificationsTab() {
 function Stories() {
   const { C } = useTheme();
   const items = [
-    { emoji:"➕", name:"Añadir", dim:true },
-    { emoji:"🐕", name:"Tobías" }, { emoji:"🐈", name:"Luna" },
-    { emoji:"🐶", name:"Max"   }, { emoji:"🐺", name:"Thor" },
-    { emoji:"🐹", name:"Coco"  }, { emoji:"🐰", name:"Nala" },
-    { emoji:"🦜", name:"Kiwi"  },
+    { emoji:"➕",  name:"Añadir", dim:true },
+    { photo:"/dog1.jpeg", emoji:"🐕", name:"Tobías" },
+    { photo:"/cat1.jpeg", emoji:"🐈", name:"Luna"   },
+    { photo:"/dog2.jpeg", emoji:"🐶", name:"Max"    },
+    { photo:"/dog3.jpeg", emoji:"🐺", name:"Thor"   },
+    { emoji:"🐹", name:"Coco" },
+    { emoji:"🐰", name:"Nala" },
+    { emoji:"🦜", name:"Kiwi" },
   ];
   return (
     <div style={{ display:"flex", gap:12, overflowX:"auto", padding:"14px 16px", scrollbarWidth:"none" }}>
       {items.map((s, i) => (
         <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, flexShrink:0, cursor:"pointer" }}>
           <div style={{
-            width:58, height:58, borderRadius:18, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26,
-            background: s.dim ? C.bgElevated : `linear-gradient(135deg, ${C.accent}33, ${C.pink}33)`,
+            width:58, height:58, borderRadius:18,
+            overflow:"hidden",
             border: s.dim ? `1.5px dashed ${C.borderHi}` : `2px solid ${C.accent}`,
-          }}>{s.emoji}</div>
+            background: s.dim ? C.bgElevated : `linear-gradient(135deg, ${C.accent}33, ${C.pink}33)`,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            flexShrink:0,
+          }}>
+            {s.photo ? (
+              <img
+                src={s.photo}
+                alt={s.name}
+                style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
+                onError={e => { e.currentTarget.style.display = "none" }}
+              />
+            ) : (
+              <span style={{ fontSize:26 }}>{s.emoji}</span>
+            )}
+          </div>
           <span style={{ fontFamily:F.body, fontSize:10, fontWeight:500, color:C.textSub }}>{s.name}</span>
         </div>
       ))}
@@ -755,9 +772,25 @@ function PostCard({ post }) {
         </div>
         <button style={{ marginLeft:"auto", background:"none", border:"none", color:C.textMuted, cursor:"pointer", fontSize:18 }}>⋯</button>
       </div>
-      <div style={{ margin:"0 14px 12px", borderRadius:14, height:180, background:`linear-gradient(135deg, ${bg}18, ${bg}08)`, border:`1px solid ${bg}30`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:80 }}>
-        {["🌿","☀️","🏡"][post.id % 3]}
-      </div>
+      {(post.photo || post.foto) ? (
+        /* Foto real — full-width, recortada al centro, sin margen lateral
+           para que llegue de borde a borde dentro del card */
+        <img
+          src={post.photo || post.foto}
+          alt={post.name ?? "foto"}
+          style={{ width:"100%", height:220, objectFit:"cover",
+                   display:"block", marginBottom:4 }}
+          onError={e => { e.currentTarget.style.display = "none" }}
+        />
+      ) : (
+        /* Fallback: placeholder de color cuando no hay foto */
+        <div style={{ margin:"0 14px 12px", borderRadius:14, height:180,
+          background:`linear-gradient(135deg, ${bg}18, ${bg}08)`,
+          border:`1px solid ${bg}30`, display:"flex", alignItems:"center",
+          justifyContent:"center", fontSize:80 }}>
+          {["🌿","☀️","🏡"][(post.id ?? 0) % 3]}
+        </div>
+      )}
       <div style={{ padding:"0 14px 4px" }}>
         <span style={{ fontFamily:F.body, fontSize:13, color:C.text }}>{post.caption} </span>
         <span style={{ fontFamily:F.body, fontSize:13, color:C.accent }}>{post.tag}</span>
@@ -1402,7 +1435,7 @@ function VetsTab() {
               <div style={{ color:C.red, marginTop:4 }}>❌ {dbg.error}</div>
             )}
             <div style={{ color:C.textMuted, marginTop:6, fontSize:10 }}>
-              Endpoints probados: kumi.systems → overpass-api.de → openstreetmap.ru
+              API: nominatim.openstreetmap.org (Nominatim)
             </div>
           </div>
         )}
