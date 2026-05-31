@@ -661,7 +661,7 @@ function Header({ tab, onBack, onNotif, unread }) {
     adoption:"Adopción", lodging:"Alojamiento", notifications:"Notificaciones",
   };
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 18px 14px", background:C.bg, borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:50, backdropFilter:"blur(12px)" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 18px 14px", background:C.bg, borderBottom:`1px solid ${C.border}`, backdropFilter:"blur(12px)" }}>
       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
         {onBack
           ? <button onClick={onBack} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:16, color:C.text }}>←</button>
@@ -1248,6 +1248,9 @@ function VetsTab() {
   const [bizVets, setBizVets]         = useState([]);
   const [locationSource, setLocSrc]   = useState(null);
   const [osmLoading, setOsmLoading]   = useState(false);
+  // ── Debug temporal (eliminar cuando Overpass funcione en prod) ──
+  const [dbg, setDbg]         = useState({});
+  const [showDbg, setShowDbg] = useState(false);
 
   // Supabase businesses — silent fail, no bloquea render
   useEffect(() => {
@@ -1262,25 +1265,49 @@ function VetsTab() {
       .catch(() => {}); // tabla puede no existir aún
   }, []);
 
-  // Overpass — se carga en background, mock data visible de inmediato
+  // Overpass — se carga en background, lista vacía visible de inmediato
   useEffect(() => {
     let cancelled = false;
     const FALLBACK = { lat: -33.4569, lon: -70.6483, source: "default" };
     const safety = setTimeout(() => { if (!cancelled) setOsmLoading(false); }, 20_000);
 
     setOsmLoading(true);
+    setDbg({ step: "iniciando…" });
+    console.log('[VetsTab] useEffect Overpass disparado');
+
     (async () => {
       try {
-        const loc = await getLocation().catch(() => FALLBACK);
+        // Paso 1: ubicación
+        setDbg(d => ({ ...d, step: "obteniendo ubicación…" }));
+        console.log('[VetsTab] llamando getLocation()');
+        const loc = await getLocation().catch(e => {
+          console.warn('[VetsTab] getLocation error:', e?.message);
+          return FALLBACK;
+        });
         if (cancelled) return;
-        setLocSrc(loc.source ?? "default");
 
-        const results = await fetchNearbyVets(loc.lat, loc.lon).catch(() => []);
+        const coordStr = `${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)} [${loc.source}]`;
+        console.log('[VetsTab] coords:', coordStr);
+        setLocSrc(loc.source ?? "default");
+        setDbg(d => ({ ...d, step: "buscando en OSM…", coords: coordStr }));
+
+        // Paso 2: Overpass
+        const t0 = performance.now();
+        const results = await fetchNearbyVets(loc.lat, loc.lon).catch(e => {
+          console.warn('[VetsTab] fetchNearbyVets error:', e?.message);
+          setDbg(d => ({ ...d, error: e?.message ?? "error desconocido" }));
+          return [];
+        });
         if (cancelled) return;
+
+        const ms = Math.round(performance.now() - t0);
+        console.log('[VetsTab] resultados:', results.length, 'en', ms, 'ms');
+        setDbg(d => ({ ...d, step: "listo", count: results.length, ms }));
 
         if (Array.isArray(results) && results.length > 0) setOsmVets(results);
-      } catch {
-        // silencio — osmVets ya tiene mockVets
+      } catch (err) {
+        console.warn('[VetsTab] error inesperado:', err?.message);
+        setDbg(d => ({ ...d, step: "error", error: err?.message }));
       } finally {
         clearTimeout(safety);
         if (!cancelled) setOsmLoading(false);
@@ -1337,6 +1364,48 @@ function VetsTab() {
 
       <div style={{ marginBottom:14 }}>
         <SearchBar placeholder="Buscar veterinarios..." value={search} onChange={setSearch} />
+      </div>
+
+      {/* ── Panel debug temporal — eliminar cuando Overpass funcione en prod ── */}
+      <div style={{ marginBottom:10 }}>
+        <button onClick={() => setShowDbg(s => !s)} style={{
+          background:C.bgElevated, border:`1px solid ${C.border}`,
+          borderRadius:10, padding:"5px 12px", fontFamily:F.body,
+          fontSize:11, color:C.textMuted, cursor:"pointer",
+          display:"flex", alignItems:"center", gap:5,
+        }}>
+          <span>🔧 Debug OSM {showDbg ? "▲" : "▼"}</span>
+          {dbg.count != null && (
+            <span style={{ color: dbg.count > 0 ? C.teal : C.red, fontWeight:700 }}>
+              · {dbg.count} resultados
+            </span>
+          )}
+        </button>
+        {showDbg && (
+          <div style={{
+            marginTop:6, background:C.bgCard,
+            border:`1px solid ${C.borderHi}`, borderRadius:12,
+            padding:"12px 14px", fontFamily:"monospace", fontSize:11,
+            lineHeight:1.7, overflowX:"auto",
+          }}>
+            <div><span style={{ color:C.textMuted }}>Estado: </span>
+              <b style={{ color:C.text }}>{dbg.step ?? "—"}</b></div>
+            <div><span style={{ color:C.textMuted }}>Coords: </span>
+              <b style={{ color:C.teal }}>{dbg.coords ?? "—"}</b></div>
+            <div><span style={{ color:C.textMuted }}>Resultados: </span>
+              <b style={{ color:dbg.count > 0 ? C.teal : C.amber }}>
+                {dbg.count != null ? `${dbg.count} vets` : "—"}
+              </b>
+              {dbg.ms != null && <span style={{ color:C.textMuted }}> en {dbg.ms}ms</span>}
+            </div>
+            {dbg.error && (
+              <div style={{ color:C.red, marginTop:4 }}>❌ {dbg.error}</div>
+            )}
+            <div style={{ color:C.textMuted, marginTop:6, fontSize:10 }}>
+              Endpoints probados: kumi.systems → overpass-api.de → openstreetmap.ru
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Estado: cargando (lista vacía) */}
@@ -1760,28 +1829,31 @@ export default function PetConnect({ isDark, toggleTheme }) {
       )}
       <div style={{ maxWidth:420, margin:"0 auto", background:C.bg, minHeight:"100vh", display:"flex", flexDirection:"column" }}>
         <style>{`* { box-sizing: border-box; } body { margin: 0; background: ${C.bg}; } input::placeholder { color: ${C.textMuted}; }`}</style>
-        <Header
-          tab={currentTab}
-          onBack={needsBack ? handleBack : null}
-          onNotif={() => { setShowNotif(!showNotif); setSubTab(null); }}
-          unread={unreadCount}
-        />
-        {!showNotif && (
-          <QuickNav
-            currentTab={activeTab}
-            currentSub={subTab}
-            onNavigate={item => {
-              setShowNotif(false);
-              if (item.mainTab === "walkers" || item.mainTab === "lost") {
-                setActiveTab(item.mainTab);
-                setSubTab(null);
-              } else {
-                setActiveTab("more");
-                setSubTab(item.id);
-              }
-            }}
+        {/* ── Zona sticky: Header + QuickNav siempre visibles ── */}
+        <div style={{ position:"sticky", top:0, zIndex:50, background:C.bg, flexShrink:0 }}>
+          <Header
+            tab={currentTab}
+            onBack={needsBack ? handleBack : null}
+            onNotif={() => { setShowNotif(!showNotif); setSubTab(null); }}
+            unread={unreadCount}
           />
-        )}
+          {!showNotif && (
+            <QuickNav
+              currentTab={activeTab}
+              currentSub={subTab}
+              onNavigate={item => {
+                setShowNotif(false);
+                if (item.mainTab === "walkers" || item.mainTab === "lost") {
+                  setActiveTab(item.mainTab);
+                  setSubTab(null);
+                } else {
+                  setActiveTab("more");
+                  setSubTab(item.id);
+                }
+              }}
+            />
+          )}
+        </div>
         <div style={{ flex:1, overflowY:"auto", paddingBottom:100 }}>
           <TabErrorBoundary key={currentTab}>
             {content[currentTab]}

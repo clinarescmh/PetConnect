@@ -95,6 +95,7 @@ function buildQuery(lat, lon, radiusM, tags) {
 }
 
 async function fetchEndpoint(url, query, signal) {
+  console.log('[overpass] → fetch', url.replace('https://', '').split('/')[0])
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -104,8 +105,11 @@ async function fetchEndpoint(url, query, signal) {
     body: `data=${encodeURIComponent(query)}`,
     signal,
   })
+  console.log('[overpass] ← status', res.status, url.replace('https://', '').split('/')[0])
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
+  const count = (json.elements || []).length
+  console.log('[overpass] ✓ elementos recibidos:', count)
   return json.elements || []
 }
 
@@ -116,17 +120,17 @@ async function queryOverpass(query) {
     try {
       const elements = await fetchEndpoint(url, query, ctrl.signal)
       clearTimeout(timer)
-      // Validate: must be an array
-      if (!Array.isArray(elements)) return []
+      if (!Array.isArray(elements)) {
+        console.warn('[overpass] respuesta no es array, siguiente endpoint')
+        continue
+      }
       return elements
-    } catch {
+    } catch (err) {
       clearTimeout(timer)
-      // try next endpoint
+      console.warn('[overpass] ✗ endpoint falló:', url.split('/')[2], '—', err?.message)
     }
   }
-  // All endpoints failed — return empty instead of throwing,
-  // so callers always get an array and never crash.
-  console.warn('[overpass] All endpoints failed, returning empty array')
+  console.warn('[overpass] ✗ todos los endpoints fallaron, retornando []')
   return []
 }
 
