@@ -419,9 +419,11 @@ const makeCard = (C, extra = {}) => ({
 
 /* ── Mock data (fallback si Supabase no responde) ── */
 const mockPets = [
-  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿", time_ago:"2h", tag:"#lavidacanina", photo:"/Dog1.jpeg" },
-  { id:2, name:"Luna",   breed:"Gata Persa",       owner:"Pedro R.", avatar:"🐈", owner_avatar:"👨", likes:267, comments:41, caption:"Reinando el balcón como siempre 👑",    time_ago:"4h", tag:"#catlife",      photo:"/cat1.jpeg" },
-  { id:3, name:"Max",    breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89,  comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉", time_ago:"6h", tag:"#perrofeliz",  photo:"/Dog2.jpeg" },
+  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿",          time_ago:"2h", tag:"#lavidacanina", photo:"/Golden_Retriever.jpeg" },
+  { id:2, name:"Luna",   breed:"Gata Persa",       owner:"Pedro R.", avatar:"🐈", owner_avatar:"👨", likes:267, comments:41, caption:"Reinando el balcón como siempre 👑",              time_ago:"4h", tag:"#catlife",       photo:"/Gato_persa.jpeg"       },
+  { id:3, name:"Max",    breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89,  comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉",    time_ago:"6h", tag:"#perrofeliz",   photo:"/Labrador.jpeg"         },
+  { id:4, name:"Bella",  breed:"Beagle",            owner:"Carlos M.",avatar:"🐕", owner_avatar:"👨", likes:98,  comments:15, caption:"¡Primera competencia de olfato! 🏆 Campeona",   time_ago:"1d", tag:"#beaglelife",   photo:"/Beagle.jpeg"           },
+  { id:5, name:"Coco",   breed:"Conejo",            owner:"Ana R.",   avatar:"🐰", owner_avatar:"👩", likes:134, comments:22, caption:"¿Quién dijo que los conejos no son fotogénicos? 🥕", time_ago:"2d", tag:"#conejito", photo:"/Conejo.jpeg"           },
 ];
 const mockVets = [
   { id:1, name:"Clínica PetCare",  distance:"0.8 km", rating:4.8, open:true, specialty:"General",   icon:"🏥", urgent:false },
@@ -716,12 +718,12 @@ function Stories() {
   const { C } = useTheme();
   const items = [
     { emoji:"➕",  name:"Añadir", dim:true },
-    { photo:"/Dog1.jpeg", emoji:"🐕", name:"Tobías" },
-    { photo:"/cat1.jpeg", emoji:"🐈", name:"Luna"   },
-    { photo:"/Dog2.jpeg", emoji:"🐶", name:"Max"    },
-    { photo:"/Dog3.jpeg", emoji:"🐺", name:"Thor"   },
-    { emoji:"🐹", name:"Coco" },
-    { emoji:"🐰", name:"Nala" },
+    { photo:"/Golden_Retriever.jpeg", emoji:"🐕", name:"Tobías" },
+    { photo:"/Gato_persa.jpeg",       emoji:"🐈", name:"Luna"   },
+    { photo:"/Labrador.jpeg",         emoji:"🐶", name:"Max"    },
+    { photo:"/Beagle.jpeg",           emoji:"🐕", name:"Thor"   },
+    { photo:"/Conejo.jpeg",           emoji:"🐰", name:"Coco"   },
+    { photo:"/Gato_persa.jpeg",       emoji:"🐈", name:"Nala"   },
     { emoji:"🦜", name:"Kiwi" },
   ];
   return (
@@ -777,18 +779,15 @@ function PostCard({ post }) {
         </div>
         <button style={{ marginLeft:"auto", background:"none", border:"none", color:C.textMuted, cursor:"pointer", fontSize:18 }}>⋯</button>
       </div>
+      {/* Foto del post — usa post.photo (mock local) o post.foto (Supabase).
+          El fallback solo aparece si ninguno de los dos existe. */}
       {(post.photo || post.foto) ? (
-        /* Foto real — full-width, recortada al centro, sin margen lateral
-           para que llegue de borde a borde dentro del card */
         <img
           src={post.photo || post.foto}
           alt={post.name ?? "foto"}
-          style={{ width:"100%", height:220, objectFit:"cover",
-                   display:"block", marginBottom:4 }}
-          onError={e => { e.currentTarget.style.display = "none" }}
+          style={{ width:"100%", height:240, objectFit:"cover", display:"block" }}
         />
       ) : (
-        /* Fallback: placeholder de color cuando no hay foto */
         <div style={{ margin:"0 14px 12px", borderRadius:14, height:180,
           background:`linear-gradient(135deg, ${bg}18, ${bg}08)`,
           border:`1px solid ${bg}30`, display:"flex", alignItems:"center",
