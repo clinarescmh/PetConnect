@@ -172,3 +172,34 @@ ALTER TABLE walkers ADD COLUMN IF NOT EXISTS tiene_certificacion BOOLEAN DEFAULT
 ALTER TABLE walkers ADD COLUMN IF NOT EXISTS redes              TEXT;
 ALTER TABLE walkers ADD COLUMN IF NOT EXISTS estado             TEXT DEFAULT 'pendiente';
 ALTER TABLE walkers ADD COLUMN IF NOT EXISTS disponibilidad     TEXT;
+
+-- ─────────────────────────────────────────────────
+-- CHALLENGES (retos semanales)
+-- ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS challenges (
+  id            BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  titulo        TEXT NOT NULL,
+  descripcion   TEXT,
+  foto          TEXT,          -- URL foto de ejemplo
+  fecha_inicio  DATE,
+  fecha_fin     DATE,
+  activo        BOOLEAN DEFAULT TRUE,
+  participantes INT DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE challenges DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON challenges TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE challenges_id_seq TO anon, authenticated;
+
+-- Reto inicial de ejemplo
+INSERT INTO challenges (titulo, descripcion, foto, fecha_inicio, fecha_fin, activo, participantes)
+VALUES (
+  'Foto de tu mascota durmiendo en posición graciosa 😴',
+  'Comparte la foto más creativa de tu mascota durmiendo. ¡La más votada gana el badge Campeón Semanal! 🏆',
+  '/Beagle.jpeg',
+  CURRENT_DATE,
+  CURRENT_DATE + INTERVAL ''7 days'',
+  true,
+  247
+)
+ON CONFLICT DO NOTHING;

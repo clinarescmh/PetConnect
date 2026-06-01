@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "./lib/supabase";
 import { getLocation, fetchNearbyVets, fetchNearbyPetShops } from "./lib/overpass";
 import { F, ThemeContext, useTheme } from "./lib/theme";
-import BusinessForm from "./components/BusinessForm";
-import WalkerForm from "./components/WalkerForm";
+import BusinessForm   from "./components/BusinessForm";
+import WalkerForm     from "./components/WalkerForm";
+import PetProfile     from "./components/PetProfile";
 import { TabErrorBoundary } from "./components/ErrorBoundary";
 
 /* ── Theme ── */
@@ -466,6 +467,19 @@ const mockAdoption = [
   { id:2, name:"Nube",   species:"Gato",  breed:"Angora mix",  age:"1 año",  gender:"Hembra", avatar:"🐈", photo:"/Gato_persa.jpeg",       org:"ONG PatitasFelices", zone:"Ñuñoa",      vaccinated:true,  castrated:true,  description:"Tranquila y muy mimosa. Ideal para departamento.", urgent:true  },
   { id:3, name:"Rocky",  species:"Perro", breed:"Pitbull mix", age:"4 años", gender:"Macho",  avatar:"🐶", photo:"/Beagle.jpeg",           org:"Particular",         zone:"La Florida", vaccinated:true,  castrated:false, description:"Dueño viaja al extranjero. Muy leal y obediente.",  urgent:true  },
 ];
+/* ── Reto semanal ── */
+const MOCK_CHALLENGE = {
+  id:1, activo:true, participantes:247,
+  titulo:      "Foto de tu mascota durmiendo en posición graciosa 😴",
+  descripcion: "Comparte la foto más creativa de tu mascota durmiendo. ¡La más votada al final de la semana gana el badge Campeón Semanal! 🏆",
+  foto:        "/Beagle.jpeg",
+};
+const CHALLENGE_POSTS = [
+  { id:"c1", name:"Max",    photo:"/Labrador.jpeg",       challengeLikes:127, caption:"¡Ocupó el sofá entero! 😂" },
+  { id:"c2", name:"Luna",   photo:"/Gato_persa.jpeg",     challengeLikes:98,  caption:"La reina necesita la almohada 👑" },
+  { id:"c3", name:"Bella",  photo:"/Beagle.jpeg",         challengeLikes:76,  caption:"¿Esto es dormir? 🐶" },
+];
+
 const mockLodging = [
   { id:1, name:"Casa PetFriendly de Ana", host:"Ana Martínez",   avatar:"👩‍🦳", rating:4.9, reviews:63,  price:20000, zone:"Providencia", capacity:"Hasta 2 perros medianos", amenities:["Jardín","Cámara 24h","Fotos diarias"],         available:true,  badge:"Superhost" },
   { id:2, name:"PetHotel Luna Verde",     host:"Establecimiento", avatar:"🏡",  rating:4.7, reviews:128, price:15000, zone:"Las Condes",  capacity:"Todas las razas",         amenities:["Piscina canina","Paseos 2x día","Grooming"], available:true,  badge:null        },
@@ -723,6 +737,139 @@ function NotificationsTab() {
   );
 }
 
+/* ── Weekly Challenge ── */
+function WeeklyChallenge() {
+  const { C } = useTheme();
+  const [challenge, setChallenge] = useState(MOCK_CHALLENGE);
+  const [participating, setParticipating] = useState(false);
+  const [votes, setVotes] = useState({});
+  const cameraRef = useRef();
+
+  // Intenta cargar reto activo de Supabase
+  useEffect(() => {
+    supabase.from("challenges").select("*").eq("activo", true).limit(1)
+      .then(({ data }) => { if (data?.[0]) setChallenge(data[0]); })
+      .catch(() => {});
+  }, []);
+
+  const toggleVote = (id) => setVotes(v => ({ ...v, [id]: !v[id] }));
+
+  const sorted = [...CHALLENGE_POSTS].sort((a, b) => {
+    return (b.challengeLikes + (votes[b.id] ? 1 : 0)) - (a.challengeLikes + (votes[a.id] ? 1 : 0));
+  });
+
+  return (
+    <div style={{ margin:"4px 16px 20px" }}>
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <span style={{ fontSize:16 }}>🏆</span>
+        <span style={{ fontFamily:F.display, fontWeight:700, fontSize:13,
+          color:C.text, letterSpacing:0.3 }}>RETO DE LA SEMANA</span>
+        <div style={{ marginLeft:"auto", background:C.amber + "22", borderRadius:8,
+          padding:"3px 10px" }}>
+          <span style={{ fontFamily:F.body, fontSize:11, fontWeight:600, color:C.amber }}>
+            3 días restantes
+          </span>
+        </div>
+      </div>
+
+      {/* Challenge card */}
+      <div style={{ ...makeCard(C), overflow:"hidden", border:`1.5px solid ${C.accent}55` }}>
+        {/* Foto de ejemplo */}
+        <div style={{ position:"relative", height:170 }}>
+          <img src={challenge.foto || "/Beagle.jpeg"} alt="reto"
+            style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+          <div style={{ position:"absolute", inset:0,
+            background:"linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.62) 100%)",
+            pointerEvents:"none" }} />
+          {/* Badge activo */}
+          <div style={{ position:"absolute", top:10, left:12, background:C.accent,
+            borderRadius:10, padding:"4px 12px", fontFamily:F.body, fontSize:11,
+            fontWeight:700, color:C.bg }}>🏆 Reto activo</div>
+          {/* Título sobre la foto */}
+          <div style={{ position:"absolute", bottom:14, left:14, right:14,
+            fontFamily:F.display, fontWeight:800, fontSize:15,
+            color:"#fff", lineHeight:1.3, textShadow:"0 1px 6px rgba(0,0,0,0.4)" }}>
+            {challenge.titulo}
+          </div>
+        </div>
+        {/* Descripción + botón */}
+        <div style={{ padding:"12px 14px 14px" }}>
+          <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub,
+            lineHeight:1.55, marginBottom:12 }}>
+            {challenge.descripcion}
+          </div>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <span style={{ fontFamily:F.body, fontSize:12, color:C.textMuted }}>
+              👥 {(challenge.participantes || 247) + (participating ? 1 : 0)} participantes
+            </span>
+            <>
+              {/* Input de cámara oculto */}
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+                style={{ display:"none" }} onChange={() => setParticipating(true)} />
+              <button onClick={() => !participating && cameraRef.current?.click()} style={{
+                background: participating ? C.teal : C.accent,
+                color: participating ? "#fff" : C.bg,
+                border:"none", borderRadius:12, padding:"9px 18px",
+                fontFamily:F.body, fontSize:13, fontWeight:600,
+                cursor: participating ? "default" : "pointer", transition:"all 0.2s",
+              }}>
+                {participating ? "✓ Participando" : "📸 Participar"}
+              </button>
+            </>
+          </div>
+        </div>
+      </div>
+
+      {/* Top participantes con votación */}
+      <div style={{ marginTop:14 }}>
+        <div style={{ fontFamily:F.body, fontSize:11, fontWeight:600, color:C.textSub,
+          marginBottom:10 }}>Top participantes · vota por tu favorito</div>
+        <div style={{ display:"flex", gap:10, overflowX:"auto",
+          scrollbarWidth:"none", paddingBottom:4 }}>
+          {sorted.map((p, i) => {
+            const total = p.challengeLikes + (votes[p.id] ? 1 : 0);
+            const isLeader = i === 0;
+            return (
+              <div key={p.id} style={{ width:120, flexShrink:0,
+                background:C.bgCard, borderRadius:14,
+                border:`1.5px solid ${isLeader ? C.amber + "88" : C.border}`,
+                overflow:"hidden" }}>
+                <div style={{ height:110, position:"relative" }}>
+                  <img src={p.photo} alt={p.name}
+                    style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                  {isLeader && (
+                    <div style={{ position:"absolute", top:6, right:6,
+                      background:C.amber, borderRadius:6, padding:"2px 7px",
+                      fontFamily:F.body, fontSize:10, fontWeight:700, color:"#fff" }}>
+                      🏆 #1
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding:"8px 10px 10px" }}>
+                  <div style={{ fontFamily:F.body, fontSize:12, fontWeight:600,
+                    color:C.text, marginBottom:5 }}>{p.name}</div>
+                  <button onClick={() => toggleVote(p.id)} style={{
+                    width:"100%", background: votes[p.id] ? C.pink + "18" : C.bgElevated,
+                    border:`1px solid ${votes[p.id] ? C.pink + "44" : C.border}`,
+                    borderRadius:8, padding:"5px 0",
+                    display:"flex", alignItems:"center", justifyContent:"center", gap:4,
+                    cursor:"pointer",
+                  }}>
+                    <span style={{ fontSize:13 }}>{votes[p.id] ? "❤️" : "🤍"}</span>
+                    <span style={{ fontFamily:F.body, fontSize:12, fontWeight:600,
+                      color: votes[p.id] ? C.pink : C.textSub }}>{total}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Feed Tab ── */
 function Stories() {
   const { C } = useTheme();
@@ -766,7 +913,7 @@ function Stories() {
   );
 }
 
-function PostCard({ post }) {
+function PostCard({ post, onPetClick }) {
   const { C } = useTheme();
   const [liked, setLiked] = useState(false);
   const [burst, setBurst] = useState(false);
@@ -780,20 +927,25 @@ function PostCard({ post }) {
   return (
     <div style={{ ...makeCard(C), margin:"0 16px 14px" }}>
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 14px 10px" }}>
-        <div style={{ position:"relative" }}>
-          <Avatar emoji={post.avatar} size={42} color={C.bgElevated} ring={C.accent} />
-          <div style={{ position:"absolute", bottom:-3, right:-3, width:20, height:20, borderRadius:7, background:C.bgCard, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, border:`1px solid ${C.border}` }}>{post.owner_avatar}</div>
-        </div>
-        <div>
-          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14, color:C.text }}>
-            {post.name || post.breed || "Mascota"}
+        {/* Zona clicable → perfil de la mascota */}
+        <div onClick={onPetClick}
+          style={{ display:"flex", alignItems:"center", gap:10, flex:1,
+            cursor: onPetClick ? "pointer" : "auto" }}>
+          <div style={{ position:"relative" }}>
+            <Avatar emoji={post.avatar} size={42} color={C.bgElevated} ring={C.accent} />
+            <div style={{ position:"absolute", bottom:-3, right:-3, width:20, height:20, borderRadius:7, background:C.bgCard, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, border:`1px solid ${C.border}` }}>{post.owner_avatar}</div>
           </div>
-          <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub }}>
-            {[post.name && post.breed ? post.breed : null, post.owner, post.time_ago]
-              .filter(Boolean).join(" · ")}
+          <div>
+            <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14, color:C.text }}>
+              {post.name || post.breed || "Mascota"}
+            </div>
+            <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub }}>
+              {[post.name && post.breed ? post.breed : null, post.owner, post.time_ago]
+                .filter(Boolean).join(" · ")}
+            </div>
           </div>
         </div>
-        <button style={{ marginLeft:"auto", background:"none", border:"none", color:C.textMuted, cursor:"pointer", fontSize:18 }}>⋯</button>
+        <button style={{ background:"none", border:"none", color:C.textMuted, cursor:"pointer", fontSize:18 }}>⋯</button>
       </div>
       {/* Foto del post — usa post.photo (mock local) o post.foto (Supabase).
           El fallback solo aparece si ninguno de los dos existe. */}
@@ -846,12 +998,17 @@ function PostCard({ post }) {
 
 function FeedTab() {
   const { C } = useTheme();
-  // Las fotos son archivos locales en /public — no depende de Supabase.
-  // Cuando el feed tenga posts reales con foto_url en Supabase, cambiar aquí.
-  const posts   = mockPets;
-  const loading = false;
+  const posts = mockPets;
+  const [petProfile, setPetProfile] = useState(null);
+
   return (
     <div>
+      {/* ── Perfil de mascota (overlay) ── */}
+      {petProfile && (
+        <PetProfile post={petProfile} allPosts={posts} onClose={() => setPetProfile(null)} />
+      )}
+
+      {/* Check-in diario */}
       <div style={{ margin:"14px 16px", background:`linear-gradient(135deg, ${C.accent}18, ${C.accent}06)`, border:`1px solid ${C.accent}33`, borderRadius:16, padding:"14px 16px", display:"flex", alignItems:"center", gap:12 }}>
         <div style={{ fontSize:28 }}>🌤️</div>
         <div style={{ flex:1 }}>
@@ -860,18 +1017,29 @@ function FeedTab() {
         </div>
         <Btn label="Registrar →" small />
       </div>
+
+      {/* Stories */}
       <div style={{ padding:"0 16px 4px" }}>
         <span style={{ fontFamily:F.display, fontWeight:700, fontSize:13, color:C.textSub, letterSpacing:0.5, textTransform:"uppercase" }}>Stories</span>
       </div>
       <Stories />
-      <div style={{ padding:"4px 16px 12px" }}>
+
+      {/* ── Reto de la Semana ── */}
+      <WeeklyChallenge />
+
+      {/* Compositor de post */}
+      <div style={{ padding:"0 16px 12px" }}>
         <div style={{ background:C.bgElevated, borderRadius:16, padding:"12px 14px", display:"flex", alignItems:"center", gap:10, border:`1px solid ${C.border}` }}>
           <Avatar emoji="🐕" size={36} color={C.bgCard} />
           <div style={{ flex:1, fontFamily:F.body, fontSize:13, color:C.textMuted }}>¿Qué está haciendo tu mascota?</div>
           <span style={{ fontSize:20, cursor:"pointer" }}>📷</span>
         </div>
       </div>
-      {loading ? <LoadingRows count={3} /> : posts.map(p => <PostCard key={p.id} post={p} />)}
+
+      {/* Posts */}
+      {posts.map(p => (
+        <PostCard key={p.id} post={p} onPetClick={() => setPetProfile(p)} />
+      ))}
     </div>
   );
 }

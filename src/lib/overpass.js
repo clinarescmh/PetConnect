@@ -87,7 +87,8 @@ function makeBbox(lat, lon, km) {
 
 async function searchNominatim(params, signal) {
   const url = new URL(BASE)
-  const defaults = { format: 'json', addressdetails: '1', limit: '25', countrycodes: 'cl' }
+  // namedetails=1 devuelve el campo namedetails.name (más preciso que address.amenity)
+  const defaults = { format: 'json', addressdetails: '1', namedetails: '1', limit: '25', countrycodes: 'cl' }
   Object.entries({ ...defaults, ...params }).forEach(([k, v]) =>
     url.searchParams.set(k, String(v))
   )
@@ -109,14 +110,29 @@ async function searchNominatim(params, signal) {
 
 // ── Parsers ───────────────────────────────────────────────────────────────────
 
+const GENERIC_NAMES = new Set(['veterinaria', 'tienda', 'farmacia', 'grooming', 'pet shop', 'sin nombre', ''])
+
 function extractName(item) {
-  const a = item.address || {}
-  return (
-    a.amenity ||
-    a.shop    ||
-    a.building ||
-    item.display_name.split(',')[0].trim()
-  ) || 'Sin nombre'
+  const a  = item.address     || {}
+  const nd = item.namedetails || {}
+
+  // 1. namedetails.name — más preciso (requiere namedetails=1)
+  const fromND = nd.name?.trim()
+
+  // 2. address fields
+  const fromAddr = (a.amenity || a.shop || a.building)?.trim()
+
+  // 3. Primera parte de display_name
+  const fromDisplay = item.display_name?.split(',')[0]?.trim()
+
+  // Elegir el primero que no sea genérico
+  for (const candidate of [fromND, fromAddr, fromDisplay]) {
+    if (candidate && !GENERIC_NAMES.has(candidate.toLowerCase())) return candidate
+  }
+
+  // Fallback: usar dirección como nombre si todo lo anterior es genérico
+  const addr = extractAddress(item)
+  return addr || fromDisplay || 'Sin nombre'
 }
 
 function extractAddress(item) {
