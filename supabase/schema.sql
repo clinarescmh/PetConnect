@@ -203,3 +203,31 @@ VALUES (
   247
 )
 ON CONFLICT DO NOTHING;
+
+-- ─────────────────────────────────────────────────
+-- PET_RELATIONS (vínculos genealógicos entre mascotas)
+-- relation_type: padre | madre | hijo | hermano | primo | media_sangre
+-- status:        pending | approved | rejected
+-- ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS pet_relations (
+  id            BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  pet_id_1      BIGINT NOT NULL,
+  pet_id_2      BIGINT NOT NULL,
+  relation_type TEXT   NOT NULL,
+  status        TEXT   NOT NULL DEFAULT 'pending',
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT no_self_relation CHECK (pet_id_1 <> pet_id_2),
+  CONSTRAINT valid_status     CHECK (status IN ('pending','approved','rejected'))
+);
+ALTER TABLE pet_relations DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON pet_relations TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE pet_relations_id_seq TO anon, authenticated;
+
+-- Mock data de demo (ajusta los IDs según tu tabla pets):
+-- Tobías (pet 1) y Max (pet 3) son hermanos; Bella (pet 4) es prima de ambos.
+-- Ejecutar solo si los IDs existen en la tabla pets:
+-- INSERT INTO pet_relations (pet_id_1, pet_id_2, relation_type, status) VALUES
+--   (1, 3, 'hermano', 'approved'),
+--   (1, 4, 'primo',   'approved'),
+--   (3, 4, 'primo',   'approved')
+-- ON CONFLICT DO NOTHING;
