@@ -166,21 +166,44 @@ function toVet(item, uLat, uLon) {
   } catch { return null }
 }
 
-/** Detecta el tipo de tienda por tags OSM y luego por palabras clave en el nombre */
+/**
+ * Detecta el tipo de tienda usando THREE fuentes en orden de confiabilidad:
+ * 1. class+type de Nominatim (siempre presentes en la respuesta JSON)
+ * 2. tags.shop de OSM (raramente presente en respuestas Nominatim)
+ * 3. Palabras clave en el nombre (cubre naming chileno)
+ */
 function detectStoreType(item) {
-  const tags = item.tags || {}
+  // 1. Campos class + type de Nominatim ─ SIEMPRE disponibles, máxima confiabilidad
+  //    Ejemplos reales: class="amenity" type="pet_grooming"
+  //                     class="shop"    type="groomer"
+  //                     class="shop"    type="pet"
+  const nomType  = (item.type  || '').toLowerCase()
+  const nomClass = (item.class || '').toLowerCase()
 
-  // 1. OSM shop tag — más preciso
+  if (nomType === 'pet_grooming' || nomType === 'groomer' ||
+      (nomClass === 'shop' && nomType === 'groomer')) {
+    return 'Peluquería'
+  }
+  if (nomType === 'pet' || nomType === 'pet_food' ||
+      (nomClass === 'shop' && (nomType === 'pet' || nomType === 'pet_food'))) {
+    return 'Tienda de mascotas'
+  }
+  if (nomType === 'aquarium' || (nomClass === 'shop' && nomType === 'aquarium')) {
+    return 'Peces & acuarios'
+  }
+
+  // 2. tags.shop de OSM — casi nunca viene en respuestas Nominatim, por completitud
+  const tags = item.tags || {}
   const OSM_MAP = {
     pet:       'Tienda de mascotas',
     pet_food:  'Alimentos para mascotas',
-    groomer:   'Peluquería',          // ← label limpio
+    groomer:   'Peluquería',
     aquarium:  'Peces & acuarios',
     animal:    'Animales & accesorios',
   }
   if (tags.shop && OSM_MAP[tags.shop]) return OSM_MAP[tags.shop]
 
-  // 2. Palabras clave en nombre/display_name — cubre el caso chileno
+  // 3. Palabras clave en nombre — imprescindible para naming chileno
   const haystack = [
     item.namedetails?.name,
     item.address?.amenity,
@@ -192,7 +215,7 @@ function detectStoreType(item) {
     'peluquer', 'baño y corte', 'baño corte', 'estética', 'estetica',
     'grooming', 'spa canin', 'corte canin', 'belleza canin',
   ]
-  if (GROOMING_KW.some(kw => haystack.includes(kw))) return 'Peluquería'  // ← label limpio
+  if (GROOMING_KW.some(kw => haystack.includes(kw))) return 'Peluquería'
 
   return 'Tienda de mascotas'
 }
@@ -262,45 +285,52 @@ export async function fetchNearbyVets(lat, lon) {
 }
 
 /**
- * Busca tiendas de mascotas Y peluquerías caninas en paralelo.
+ * Busca tiendas Y peluquerías en paralelo, estrategia diferenciada:
  *
- * Diseño:
- *  - Un solo bbox de 25 km (no loop, sin early-return por tipo)
- *  - Tiendas y peluquerías se buscan en el MISMO lote paralelo
- *  - bounded=1 → restringe estrictamente al bbox (evita resultados lejanos)
- *  - Filtro adicional: descartar cualquier resultado > 30 km (por si bounded falla)
- *  - Todos los resultados se combinan, deduplicados y ordenados por distancia
+ * TIENDAS: bbox + bounded=1 (restringe al área del usuario)
+ *   - Nombres reales en Chile: "Mundo Mascotas", "PetZoo", "Animales X"
+ *
+ * PELUQUERÍAS: solo countrycodes=cl, SIN viewbox ni bounded
+ *   - Confirmado por prueba directa de URL: q=peluqueria canina&countrycodes=cl → 5 resultados en Santiago
+ *   - Filtro de 30km aplicado DESPUÉS para descartar resultados fuera del área
+ *
+ * Ambos resultados se combinan, deduplicados y ordenados por distancia.
  */
 export async function fetchNearbyPetShops(lat, lon) {
   console.log('[nominatim] fetchNearbyPetShops', lat.toFixed(4), lon.toFixed(4))
-  const ctrl    = new AbortController()
-  const safety  = setTimeout(() => ctrl.abort(), 25_000)
-  const MAX_KM  = 30   // descarta resultados a más de 30 km
-  const bbox    = makeBbox(lat, lon, 25)
-
-  // ── Queries ────────────────────────────────────────────────────────────────
-  // Tiendas: 'mascotas' y 'pet' capturan nombres reales (PetZoo, Mundo Mascotas…)
-  //          ya que en OSM Chile no hay tiendas llamadas "Tienda Mascotas"
-  // Peluquerías: confirmadas con WebFetch — devuelven 5+ resultados reales en CL
-  const TIENDA_Q  = ['mascotas',          'pet',            'animales']
-  const PELUCA_Q  = ['peluqueria canina', 'baño corte perros', 'estetica canina']
+  const ctrl   = new AbortController()
+  const safety = setTimeout(() => ctrl.abort(), 25_000)
+  const MAX_KM = 30
+  const bbox   = makeBbox(lat, lon, 25)
 
   try {
-    const settled = await Promise.allSettled([
-      // Tiendas — bounded=1 (estricto, no queremos resultados de otras ciudades)
-      ...TIENDA_Q.map(q =>
-        searchNominatim({ q, viewbox: bbox, bounded: '1', limit: '12' }, ctrl.signal)
-          .catch(() => [])
-      ),
-      // Peluquerías — bounded=1 también; el filtro de 30km es el net de seguridad
-      ...PELUCA_Q.map(q =>
-        searchNominatim({ q, viewbox: bbox, bounded: '1', limit: '12' }, ctrl.signal)
-          .catch(() => [])
-      ),
+    const [tiendaSettled, pelucaSettled] = await Promise.allSettled([
+
+      // ── TIENDAS: bbox estricto ──────────────────────────────────────────────
+      Promise.allSettled(
+        ['mascotas', 'pet', 'animales'].map(q =>
+          searchNominatim({ q, viewbox: bbox, bounded: '1', limit: '12' }, ctrl.signal)
+            .catch(() => [])
+        )
+      ).then(r => r.flatMap(x => x.status === 'fulfilled' ? x.value : [])),
+
+      // ── PELUQUERÍAS: búsqueda nacional + filtro de distancia ───────────────
+      // Sin viewbox ni bounded — igual que la URL que devuelve 5 resultados reales.
+      // countrycodes=cl viene de los defaults de searchNominatim.
+      Promise.allSettled(
+        ['peluqueria canina', 'estetica canina'].map(q =>
+          searchNominatim({ q, limit: '20' }, ctrl.signal)
+            .catch(() => [])
+        )
+      ).then(r => r.flatMap(x => x.status === 'fulfilled' ? x.value : [])),
+
     ])
 
-    const allItems = settled.flatMap(r => r.status === 'fulfilled' ? r.value : [])
-    console.log('[nominatim] stores raw (tiendas+peluquerías):', allItems.length)
+    const allItems = [
+      ...(tiendaSettled.status === 'fulfilled' ? tiendaSettled.value : []),
+      ...(pelucaSettled.status === 'fulfilled' ? pelucaSettled.value : []),
+    ]
+    console.log('[nominatim] stores raw:', allItems.length, '(tiendas + peluquerías)')
 
     // Dedup por place_id
     const seen = new Set()
@@ -315,7 +345,7 @@ export async function fetchNearbyPetShops(lat, lon) {
     return unique
       .map(i => toStore(i, lat, lon))
       .filter(Boolean)
-      .filter(s => s.distanceKm <= MAX_KM)   // ← descarta > 30 km
+      .filter(s => s.distanceKm <= MAX_KM)   // ← descarta > 30km
       .sort((a, b) => a.distanceKm - b.distanceKm)
 
   } finally {
