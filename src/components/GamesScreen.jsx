@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme, F } from '../lib/theme'
 import { usePetCoins } from '../lib/petcoins.jsx'
 
@@ -35,15 +35,29 @@ function TriviaGame({ onBack }) {
 
   const q = TRIVIA[qIdx]
 
-  const handleAnswer = (i) => {
-    if (selected !== null) return
-    setSelected(i)
-    const correct = i === q.c
-    if (correct) { setScore(s => s + 1); addCoins(50) }
-    setTimeout(() => {
-      if (qIdx + 1 >= TRIVIA.length) setDone(true)
-      else { setQIdx(x => x + 1); setSelected(null) }
+  // ── Avance a la siguiente pregunta ──────────────────────────────────────────
+  // useEffect garantiza que qIdx siempre tiene el valor actual cuando el timer
+  // dispara, sin el problema de closure que tiene un setTimeout inline.
+  useEffect(() => {
+    if (selected === null) return          // solo actuar cuando hay respuesta
+    const timer = setTimeout(() => {
+      if (qIdx + 1 >= TRIVIA.length) {
+        setDone(true)
+      } else {
+        setQIdx(qIdx + 1)
+        setSelected(null)
+      }
     }, 1200)
+    return () => clearTimeout(timer)       // limpiar si el componente re-renderiza
+  }, [selected, qIdx])
+
+  const handleAnswer = (i) => {
+    if (selected !== null) return          // ignorar doble-clic
+    setSelected(i)
+    if (i === q.c) {
+      setScore(s => s + 1)
+      addCoins(50)
+    }
   }
 
   if (done) return (
@@ -116,14 +130,27 @@ function RazasGame({ onBack }) {
 
   const r = RAZAS[rIdx]
 
+  // ── Avance a la siguiente foto ─────────────────────────────────────────────
+  useEffect(() => {
+    if (selected === null) return
+    const timer = setTimeout(() => {
+      if (rIdx + 1 >= RAZAS.length) {
+        setDone(true)
+      } else {
+        setRIdx(rIdx + 1)
+        setSelected(null)
+      }
+    }, 1200)
+    return () => clearTimeout(timer)
+  }, [selected, rIdx])
+
   const handleAnswer = (i) => {
     if (selected !== null) return
     setSelected(i)
-    if (i === r.c) { setScore(s => s + 1); addCoins(30) }
-    setTimeout(() => {
-      if (rIdx + 1 >= RAZAS.length) setDone(true)
-      else { setRIdx(x => x + 1); setSelected(null) }
-    }, 1200)
+    if (i === r.c) {
+      setScore(s => s + 1)
+      addCoins(30)
+    }
   }
 
   if (done) return (
