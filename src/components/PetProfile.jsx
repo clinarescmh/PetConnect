@@ -129,26 +129,32 @@ function LinkModal({ fromPet, existingIds, onClose, onLinked }) {
 /* ── PetProfile principal ── */
 export default function PetProfile({ post, allPosts = [], onClose }) {
   const { C } = useTheme()
+
+  // Guard crítico — nunca debe recibir null/undefined, pero si pasa devuelve null limpio
+  if (!post) return null
+
   const [petData,    setPetData]    = useState(post)
   const [shared,     setShared]     = useState(false)
   const [editMode,   setEditMode]   = useState(false)
   const [showLink,   setShowLink]   = useState(false)
 
   // Follow state (desde localStorage)
-  const petFollowId = petData.username || String(petData.id ?? 1)
+  const petFollowId = (petData?.username) || String(petData?.id ?? 'demo')
   const [isFollowing, setIsFollowing] = useState(() => loadFollowing().includes(petFollowId))
 
-  // Construye relaciones: demo + hermanos de hogar automáticos
-  const [extraRels, setExtraRels] = useState(() => {
-    const myPets = loadPets()
-    const petName = petData.name || ''
-    return myPets
-      .filter(p => p.nombre !== petName && p.nombre)
-      .map((p, i) => ({
-        pet1: { id: petData.id ?? 1, name: petName,  photo: petData.photo  },
-        pet2: { id: p.id || 100 + i, name: p.nombre, photo: p.foto || null },
-        type: 'hermano de hogar', status: 'approved',
-      }))
+  // Construye relaciones: demo + hermanos de hogar automáticos (con guard para evitar crash)
+  const [extraRels] = useState(() => {
+    try {
+      const myPets = loadPets()
+      const petName = petData?.name || ''
+      return (myPets || [])
+        .filter(p => p?.nombre && p.nombre !== petName)
+        .map((p, i) => ({
+          pet1: { id: petData?.id ?? 1, name: petName,  photo: petData?.photo || null },
+          pet2: { id: p.id || 100 + i,  name: p.nombre, photo: p.foto  || null },
+          type: 'hermano de hogar', status: 'approved',
+        }))
+    } catch { return [] }
   })
   const [relations, setRelations] = useState([...DEMO_RELATIONS, ...extraRels])
 

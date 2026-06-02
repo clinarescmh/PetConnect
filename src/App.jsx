@@ -2325,13 +2325,15 @@ export default function PetConnect({ isDark, toggleTheme }) {
           onAddPet={() => setShowOwnerProfile(false)}
         />
       )}
-      {/* ── Perfil de mascota global ── */}
+      {/* ── Perfil de mascota global (TabErrorBoundary evita pantalla negra) ── */}
       {petProfileData && (
-        <PetProfile
-          post={petProfileData}
-          allPosts={mockPets}
-          onClose={() => setPetProfileData(null)}
-        />
+        <TabErrorBoundary>
+          <PetProfile
+            post={petProfileData}
+            allPosts={mockPets}
+            onClose={() => setPetProfileData(null)}
+          />
+        </TabErrorBoundary>
       )}
       {/* Modales de registro (full-screen) */}
       {modal === "business" && (
