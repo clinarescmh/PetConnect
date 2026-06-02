@@ -31,7 +31,7 @@ const F = {
   body:    "'DM Sans', sans-serif",
 };
 
-export default function LoginScreen({ onGuestAccess, isDark, toggleTheme }) {
+export default function LoginScreen({ onGuestAccess, onNewUserRegistered, isDark, toggleTheme }) {
   const C = isDark ? darkColors : lightColors;
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -40,7 +40,22 @@ export default function LoginScreen({ onGuestAccess, isDark, toggleTheme }) {
 
   const handleEmailAuth = (e) => {
     e.preventDefault();
-    setMessage({ type: "error", text: "La autenticación con email estará disponible próximamente." });
+    if (mode === "signup") {
+      if (!email.trim() || password.length < 6) {
+        setMessage({ type:"error", text:"Ingresa un email válido y contraseña de al menos 6 caracteres." });
+        return;
+      }
+      // Flujo demo: simula registro exitoso y lleva al setup de usuario nuevo
+      setMessage({ type:"success", text:"¡Cuenta creada! Configurando tu perfil…" });
+      setTimeout(() => onNewUserRegistered?.(), 800);
+      return;
+    }
+    if (mode === "forgot") {
+      setMessage({ type:"success", text:"Te enviamos un enlace para restablecer tu contraseña." });
+      return;
+    }
+    // Login — mostrar "próximamente" solo para login
+    setMessage({ type:"error", text:"La autenticación con email estará disponible próximamente." });
   };
 
   const inputStyle = {

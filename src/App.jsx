@@ -5,7 +5,8 @@ import { F, ThemeContext, useTheme } from "./lib/theme";
 import BusinessForm    from "./components/BusinessForm";
 import WalkerForm      from "./components/WalkerForm";
 import PetProfile      from "./components/PetProfile";
-import PetCoinsScreen  from "./components/PetCoinsScreen";
+import PetCoinsScreen     from "./components/PetCoinsScreen";
+import MyPetFormComponent from "./components/MyPetForm";
 import { PetCoinsProvider, usePetCoins, COINS_ACTIONS } from "./lib/petcoins.jsx";
 import { TabErrorBoundary } from "./components/ErrorBoundary";
 
@@ -1239,18 +1240,59 @@ function WalkersTab({ onRegisterWalker }) {
 function HealthTab() {
   const { C } = useTheme();
   const [section, setSection] = useState("pasaporte");
+  const [showEditPet, setShowEditPet] = useState(false);
+  const [myPet, setMyPet] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("petconnect_my_pet") || "null") }
+    catch { return null }
+  });
   const sColors = { ok:C.accent, soon:C.amber, overdue:C.red };
   const sLabels = { ok:"Al día", soon:"Próximo", overdue:"Vencido" };
+
+  // Calcular edad a partir de fecha de nacimiento
+  const age = myPet?.fechaNacimiento
+    ? (() => {
+        const months = (new Date() - new Date(myPet.fechaNacimiento)) / (1000 * 60 * 60 * 24 * 30.44);
+        return months < 12 ? `${Math.round(months)}m` : `${Math.floor(months/12)} años`;
+      })()
+    : null;
+
   return (
     <div style={{ padding:"16px" }}>
+      {/* Formulario de edición de mascota */}
+      {showEditPet && (
+        <MyPetFormComponent
+          mode="edit"
+          initialData={myPet}
+          onSave={data => { setMyPet(data); setShowEditPet(false); }}
+          onClose={() => setShowEditPet(false)}
+        />
+      )}
+
+      {/* Header de mascota — datos reales o placeholder */}
       <div style={{ background:`linear-gradient(135deg, ${C.blue}22, ${C.blue}08)`, border:`1px solid ${C.blue}33`, borderRadius:18, padding:"16px", marginBottom:16, display:"flex", alignItems:"center", gap:14 }}>
-        <Avatar emoji="🐕" size={54} color={C.blue + "22"} />
+        {myPet?.foto
+          ? <img src={myPet.foto} alt={myPet.nombre}
+              style={{ width:54, height:54, borderRadius:16, objectFit:"cover", flexShrink:0 }} />
+          : <Avatar emoji={myPet ? "🐾" : "🐕"} size={54} color={C.blue + "22"} />
+        }
         <div style={{ flex:1 }}>
-          <div style={{ fontFamily:F.display, fontWeight:800, fontSize:17, color:C.text }}>Tobías</div>
-          <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub }}>Golden Retriever · 3 años · Macho</div>
-          <div style={{ fontFamily:F.body, fontSize:11, color:C.textMuted, marginTop:3 }}>Chip: 985141003012345</div>
+          <div style={{ fontFamily:F.display, fontWeight:800, fontSize:17, color:C.text }}>
+            {myPet?.nombre || "Mi mascota"}
+          </div>
+          <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub }}>
+            {[myPet?.raza, age, myPet?.sexo].filter(Boolean).join(" · ") || "Sin configurar"}
+          </div>
+          {!myPet && (
+            <div style={{ fontFamily:F.body, fontSize:11, color:C.accent, marginTop:3, fontWeight:600 }}>
+              Toca ✏️ para configurar tu mascota
+            </div>
+          )}
         </div>
-        <Btn label="Cambiar" variant="ghost" small />
+        <button onClick={() => setShowEditPet(true)} style={{
+          background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10,
+          width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center",
+          cursor:"pointer", fontSize:15, flexShrink:0,
+        }}>✏️</button>
       </div>
       <div style={{ background:C.redDim, border:`1px solid ${C.red}44`, borderRadius:14, padding:"12px 14px", marginBottom:14, display:"flex", alignItems:"center", gap:10 }}>
         <span style={{ fontSize:20 }}>⚠️</span>

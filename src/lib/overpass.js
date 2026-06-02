@@ -315,16 +315,26 @@ export async function fetchNearbyPetShops(lat, lon) {
       ).then(r => r.flatMap(x => x.status === 'fulfilled' ? x.value : [])),
 
       // ── PELUQUERÍAS: búsqueda nacional + filtro de distancia ───────────────
-      // Sin viewbox ni bounded — igual que la URL que devuelve 5 resultados reales.
-      // countrycodes=cl viene de los defaults de searchNominatim.
-      // Cascada de 6 términos para maximizar cobertura de naming chileno.
+      // Cada query loguea su conteo individual ANTES del dedup.
       Promise.allSettled(
         ['peluqueria canina', 'estetica canina', 'spa canino',
          'grooming santiago', 'estetica animal', 'corte perro'].map(q =>
           searchNominatim({ q, limit: '20' }, ctrl.signal)
-            .catch(() => [])
+            .then(items => {
+              console.log(`[nominatim:peluca] q="${q}" → ${items.length} resultados`)
+              return items
+            })
+            .catch(err => {
+              console.warn(`[nominatim:peluca] q="${q}" ERROR:`, err?.message)
+              return []
+            })
         )
-      ).then(r => r.flatMap(x => x.status === 'fulfilled' ? x.value : [])),
+      ).then(r => {
+        const merged = r.flatMap(x => x.status === 'fulfilled' ? x.value : [])
+        const uniqueIds = new Set(merged.map(i => i.place_id))
+        console.log(`[nominatim:peluca] TOTAL antes dedup: ${merged.length} → IDs únicos: ${uniqueIds.size}`)
+        return merged
+      }),
 
       // ── ACUARIOS: naming chileno específico ────────────────────────────────
       Promise.allSettled(
