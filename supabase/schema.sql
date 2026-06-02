@@ -231,3 +231,18 @@ GRANT USAGE, SELECT ON SEQUENCE pet_relations_id_seq TO anon, authenticated;
 --   (1, 4, 'primo',   'approved'),
 --   (3, 4, 'primo',   'approved')
 -- ON CONFLICT DO NOTHING;
+
+-- ─────────────────────────────────────────────────
+-- PETCOINS (gamificación)
+-- action: post_photo | give_like | health_record | book_walk | daily_checkin | weekly_challenge
+-- ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS petcoins (
+  id          BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  user_id     TEXT,          -- null para usuarios invitados
+  action      TEXT NOT NULL,
+  amount      INT  NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE petcoins DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON petcoins TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE petcoins_id_seq TO anon, authenticated;

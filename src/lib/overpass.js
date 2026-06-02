@@ -174,7 +174,7 @@ function detectStoreType(item) {
   const OSM_MAP = {
     pet:       'Tienda de mascotas',
     pet_food:  'Alimentos para mascotas',
-    groomer:   'Peluquería & Grooming',
+    groomer:   'Peluquería',          // ← label limpio
     aquarium:  'Peces & acuarios',
     animal:    'Animales & accesorios',
   }
@@ -192,7 +192,7 @@ function detectStoreType(item) {
     'peluquer', 'baño y corte', 'baño corte', 'estética', 'estetica',
     'grooming', 'spa canin', 'corte canin', 'belleza canin',
   ]
-  if (GROOMING_KW.some(kw => haystack.includes(kw))) return 'Peluquería & Grooming'
+  if (GROOMING_KW.some(kw => haystack.includes(kw))) return 'Peluquería'  // ← label limpio
 
   return 'Tienda de mascotas'
 }
@@ -208,7 +208,7 @@ function toStore(item, uLat, uLon) {
       id:          item.place_id,
       name:        extractName(item),
       type:        storeType,
-      icon:        storeType.includes('Grooming') ? '✂️' : '🐾',
+      icon:        storeType.includes('Peluquer') ? '✂️' : '🐾',
       discount:    null,
       phone:       null,
       address:     extractAddress(item),
@@ -275,20 +275,19 @@ export async function fetchNearbyPetShops(lat, lon) {
       try {
         const bbox = makeBbox(lat, lon, km)
 
-        // Queries en paralelo (conjunto reducido para respetar rate limit de Nominatim)
-        // Los 5 términos chilenos de grooming se ejecutan junto a tiendas generales
+        // Queries confirmadas en producción — sin "santiago" en q (lo filtra countrycodes=cl)
+        // bounded=0: prefiere resultados en viewbox pero no los restringe estrictamente
         const QUERIES = [
+          'peluqueria canina',   // ← confirmado: devuelve 5+ resultados reales en CL
           'tienda mascotas',
+          'baño corte perros',
+          'estetica canina',
+          'peluqueria perros',
           'pet shop',
-          'peluqueria canina santiago',
-          'baño corte mascotas santiago',
-          'estetica canina santiago',
-          'grooming mascotas santiago',
-          'peluqueria perros santiago',
         ]
         const settled = await Promise.allSettled(
           QUERIES.map(q =>
-            searchNominatim({ q, viewbox: bbox, bounded: '0', limit: '10' }, ctrl.signal)
+            searchNominatim({ q, viewbox: bbox, bounded: '0', limit: '15' }, ctrl.signal)
               .catch(() => [])
           )
         )

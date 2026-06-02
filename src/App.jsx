@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "./lib/supabase";
 import { getLocation, fetchNearbyVets, fetchNearbyPetShops } from "./lib/overpass";
 import { F, ThemeContext, useTheme } from "./lib/theme";
-import BusinessForm   from "./components/BusinessForm";
-import WalkerForm     from "./components/WalkerForm";
-import PetProfile     from "./components/PetProfile";
+import BusinessForm    from "./components/BusinessForm";
+import WalkerForm      from "./components/WalkerForm";
+import PetProfile      from "./components/PetProfile";
+import PetCoinsScreen  from "./components/PetCoinsScreen";
+import { PetCoinsProvider, usePetCoins, COINS_ACTIONS } from "./lib/petcoins.jsx";
 import { TabErrorBoundary } from "./components/ErrorBoundary";
 
 /* ── Theme ── */
@@ -487,7 +489,7 @@ const CHALLENGE_POSTS = [
 
 const mockLodging = [
   { id:1, name:"Casa PetFriendly de Ana", host:"Ana Martínez",   avatar:"👩‍🦳", rating:4.9, reviews:63,  price:20000, zone:"Providencia", capacity:"Hasta 2 perros medianos", amenities:["Jardín","Cámara 24h","Fotos diarias"],         available:true,  badge:"Superhost" },
-  { id:2, name:"PetHotel Luna Verde",     host:"Establecimiento", avatar:"🏡",  rating:4.7, reviews:128, price:15000, zone:"Las Condes",  capacity:"Todas las razas",         amenities:["Piscina canina","Paseos 2x día","Grooming"], available:true,  badge:null        },
+  { id:2, name:"PetHotel Luna Verde",     host:"Establecimiento", avatar:"🏡",  rating:4.7, reviews:128, price:15000, zone:"Las Condes",  capacity:"Todas las razas",         amenities:["Piscina canina","Paseos 2x día","Peluquería"], available:true,  badge:null        },
   { id:3, name:"Guardería Familiar Soto", host:"Rodrigo Soto",   avatar:"👨‍🦲", rating:4.8, reviews:41,  price:12000, zone:"Maipú",       capacity:"Perros pequeños y gatos", amenities:["Sin jaulas","Fotos diarias"],                 available:false, badge:null        },
 ];
 const mockNotifications = [
@@ -758,33 +760,44 @@ function QuickNav({ currentTab, currentSub, onNavigate }) {
 }
 
 /* ── Header ── */
-function Header({ tab, onBack, onNotif, unread }) {
+function Header({ tab, onBack, onNotif, unread, onCoinsClick }) {
   const { C, isDark, toggleTheme } = useTheme();
+  const { coins } = usePetCoins();
   const titles = {
     feed:"PetConnect", walkers:"Paseos & Cuidado", health:"Historial Médico",
     lost:"Mascotas Perdidas", more:"Servicios", vets:"Veterinarios",
     stores:"Tiendas", breeding:"Comunidad", store:"PetStore",
     adoption:"Adopción", lodging:"Alojamiento", notifications:"Notificaciones",
+    petcoins:"PetCoins",
   };
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 18px 14px", background:C.bg, borderBottom:`1px solid ${C.border}`, backdropFilter:"blur(12px)" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px 12px", background:C.bg, borderBottom:`1px solid ${C.border}`, backdropFilter:"blur(12px)" }}>
       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
         {onBack
           ? <button onClick={onBack} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:16, color:C.text }}>←</button>
           : <img src="/icon.jpeg" alt="PetConnect" style={{ width:34, height:34, borderRadius:10, objectFit:"cover", flexShrink:0 }} />
         }
-        <span style={{ fontFamily:F.display, fontWeight:800, fontSize:19, color:C.text, letterSpacing:-0.5 }}>{titles[tab] || "PetConnect"}</span>
+        <span style={{ fontFamily:F.display, fontWeight:800, fontSize:18, color:C.text, letterSpacing:-0.5 }}>{titles[tab] || "PetConnect"}</span>
       </div>
-      <div style={{ display:"flex", gap:8 }}>
-        <button onClick={onNotif} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", position:"relative" }}>
-          <span style={{ fontSize:16 }}>🔔</span>
-          {unread > 0 && <span style={{ position:"absolute", top:-3, right:-3, background:C.red, width:14, height:14, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color:"#fff", fontWeight:700, border:`2px solid ${C.bg}` }}>{unread}</span>}
+      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+        {/* Widget PetCoins */}
+        <button onClick={onCoinsClick} style={{
+          display:"flex", alignItems:"center", gap:4,
+          background: C.amber + "1A", border:`1px solid ${C.amber}33`,
+          borderRadius:20, padding:"5px 10px", cursor:"pointer",
+          transition:"all 0.15s",
+        }}>
+          <span style={{ fontSize:15 }}>🪙</span>
+          <span style={{ fontFamily:F.display, fontWeight:700, fontSize:13, color:C.amber }}>
+            {coins.toLocaleString()}
+          </span>
         </button>
-        <button style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
-          <span style={{ fontSize:16 }}>💬</span>
+        <button onClick={onNotif} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", position:"relative" }}>
+          <span style={{ fontSize:15 }}>🔔</span>
+          {unread > 0 && <span style={{ position:"absolute", top:-3, right:-3, background:C.red, width:14, height:14, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color:"#fff", fontWeight:700 }}>{unread}</span>}
         </button>
-        <button onClick={toggleTheme} title={isDark ? "Modo claro" : "Modo oscuro"} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
-          <span style={{ fontSize:16 }}>{isDark ? "☀️" : "🌙"}</span>
+        <button onClick={toggleTheme} title={isDark ? "Modo claro" : "Modo oscuro"} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
+          <span style={{ fontSize:15 }}>{isDark ? "☀️" : "🌙"}</span>
         </button>
       </div>
     </div>
@@ -820,6 +833,7 @@ function NotificationsTab() {
 /* ── Weekly Challenge ── */
 function WeeklyChallenge() {
   const { C } = useTheme();
+  const { addCoins } = usePetCoins();
   const [challenge, setChallenge] = useState(MOCK_CHALLENGE);
   const [participating, setParticipating] = useState(false);
   const [votes, setVotes] = useState({});
@@ -886,7 +900,8 @@ function WeeklyChallenge() {
             <>
               {/* Input de cámara oculto */}
               <input ref={cameraRef} type="file" accept="image/*" capture="environment"
-                style={{ display:"none" }} onChange={() => setParticipating(true)} />
+                style={{ display:"none" }}
+                onChange={() => { setParticipating(true); addCoins("WEEKLY_CHALLENGE"); }} />
               <button onClick={() => !participating && cameraRef.current?.click()} style={{
                 background: participating ? C.teal : C.accent,
                 color: participating ? "#fff" : C.bg,
@@ -1010,11 +1025,16 @@ function Stories() {
 
 function PostCard({ post, onPetClick }) {
   const { C } = useTheme();
+  const { addCoins } = usePetCoins();
   const [liked, setLiked] = useState(false);
   const [burst, setBurst] = useState(false);
 
   const handleLike = () => {
-    if (!liked) { setBurst(true); setTimeout(() => setBurst(false), 700); }
+    if (!liked) {
+      setBurst(true);
+      setTimeout(() => setBurst(false), 700);
+      addCoins("GIVE_LIKE");  // +10 🪙
+    }
     setLiked(l => !l);
   };
   const postColors = ["#C8F04D", "#F055A3", "#4A9EFF", "#9B6EF5", "#2DD4BF"];
@@ -1093,6 +1113,7 @@ function PostCard({ post, onPetClick }) {
 
 function FeedTab() {
   const { C, openPetProfile } = useTheme();
+  const { addCoins } = usePetCoins();
   const posts = mockPets;
 
   return (
@@ -1104,7 +1125,7 @@ function FeedTab() {
           <div style={{ fontFamily:F.display, fontWeight:700, fontSize:13, color:C.accent }}>Check-in diario</div>
           <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub, marginTop:2 }}>¿Cómo amaneció Tobías hoy?</div>
         </div>
-        <Btn label="Registrar →" small />
+        <Btn label="Registrar →" small onClick={() => addCoins("DAILY_CHECKIN")} />
       </div>
 
       {/* Stories */}
@@ -1136,6 +1157,7 @@ function FeedTab() {
 /* ── Walkers Tab ── */
 function WalkersTab({ onRegisterWalker }) {
   const { C } = useTheme();
+  const { addCoins } = usePetCoins();
   const { data: walkers, loading } = useData("walkers", mockWalkers);
   const [filter, setFilter] = useState("Todos");
   return (
@@ -1203,7 +1225,8 @@ function WalkersTab({ onRegisterWalker }) {
             </div>
           </div>
           <div style={{ display:"flex", gap:8, marginTop:14 }}>
-            <Btn label="📅 Reservar" color={w.available ? C.teal : C.textMuted} />
+            <Btn label="📅 Reservar" color={w.available ? C.teal : C.textMuted}
+              onClick={() => w.available && addCoins("BOOK_WALK")} />
             <Btn label="💬 Mensaje" variant="ghost" />
           </div>
         </div>
@@ -1507,13 +1530,15 @@ function LodgingTab() {
 /* ── More Tab ── */
 function MoreTab({ onNavigate, onRegisterBusiness }) {
   const { C } = useTheme();
+  const { coins } = usePetCoins();
   const items = [
-    { id:"adoption", icon:"🏠", label:"Adopción",    desc:"Mascotas buscan hogar hoy",    color:C.purple },
-    { id:"lodging",  icon:"🏡", label:"Alojamiento", desc:"Casas y hoteles pet-friendly", color:C.blue   },
-    { id:"vets",     icon:"🏥", label:"Veterinarios",desc:"Clínicas y urgencias 24h",     color:C.red    },
-    { id:"stores",   icon:"🛒", label:"Tiendas",     desc:"Alimentos y accesorios cerca", color:C.teal   },
-    { id:"breeding", icon:"💕", label:"Cruzas",      desc:"Conecta con dueños responsables", color:C.pink },
-    { id:"store",    icon:"🏪", label:"PetStore",    desc:"Compras con envío a domicilio", color:C.accent },
+    { id:"petcoins",  icon:"🪙", label:"PetCoins",    desc:`${coins.toLocaleString()} monedas · Recompensas`, color:C.amber  },
+    { id:"adoption",  icon:"🏠", label:"Adopción",    desc:"Mascotas buscan hogar hoy",    color:C.purple },
+    { id:"lodging",   icon:"🏡", label:"Alojamiento", desc:"Casas y hoteles pet-friendly", color:C.blue   },
+    { id:"vets",      icon:"🏥", label:"Veterinarios",desc:"Clínicas y urgencias 24h",     color:C.red    },
+    { id:"stores",    icon:"🛒", label:"Tiendas",     desc:"Alimentos y accesorios cerca", color:C.teal   },
+    { id:"breeding",  icon:"💕", label:"Cruzas",      desc:"Conecta con dueños responsables", color:C.pink },
+    { id:"store",     icon:"🏪", label:"PetStore",    desc:"Compras con envío a domicilio", color:C.accent },
   ];
   return (
     <div style={{ padding:"16px" }}>
@@ -1853,7 +1878,7 @@ function StoresTab() {
     const matchCat =
       cat === "Todos"    ? true :
       cat === "Tienda"   ? type.includes("mascota") || type.includes("Animal") || type.includes("Alimento") :
-      cat === "Peluquería" ? (type.includes("Grooming") || type.includes("Peluquer")) :
+      cat === "Peluquería" ? type.includes("Peluquer") :
       cat === "Acuarios" ? type.includes("cua") :
       true;
     return matchSearch && matchCat;
@@ -2083,6 +2108,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
     adoption:      <AdoptionTab />,
     lodging:       <LodgingTab />,
     notifications: <NotificationsTab />,
+    petcoins:      <PetCoinsScreen onClose={() => setSubTab(null)} />,
   };
 
   const handleBack = () => {
@@ -2094,6 +2120,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
 
   return (
     <ThemeContext.Provider value={{ C, isDark, toggleTheme, openModal, openPetProfile }}>
+    <PetCoinsProvider>
       {/* ── Perfil de mascota global (accesible desde cualquier tab) ── */}
       {petProfileData && (
         <PetProfile
@@ -2136,6 +2163,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
             onBack={needsBack ? handleBack : null}
             onNotif={() => { setShowNotif(!showNotif); setSubTab(null); }}
             unread={unreadCount}
+            onCoinsClick={() => { setSubTab("petcoins"); setShowNotif(false); }}
           />
           {!showNotif && (
             <QuickNav
@@ -2172,6 +2200,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
           />
         )}
       </div>
+    </PetCoinsProvider>
     </ThemeContext.Provider>
   );
 }
