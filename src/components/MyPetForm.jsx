@@ -12,8 +12,8 @@
 import { useState } from 'react'
 import { useTheme, F } from '../lib/theme'
 
-export const PET_LS_KEY   = 'petconnect_my_pet'
-export const OWNER_LS_KEY = 'petconnect_owner'
+export { PETS_KEY as PET_LS_KEY, OWNER_KEY as OWNER_LS_KEY } from '../lib/pets'
+import { PETS_KEY, OWNER_KEY, loadPets, savePets, genId, suggestUsername } from '../lib/pets'
 
 export const SPECIES = [
   { id:'perro',  emoji:'🐕', label:'Perro'  },
@@ -39,25 +39,46 @@ export default function MyPetForm({ mode = 'welcome', initialData, onSave, onClo
 
   const [form, setForm] = useState({
     nombre:          initialData?.nombre          || '',
+    username:        initialData?.username        || '',
     especie:         initialData?.especie         || '',
     raza:            initialData?.raza            || '',
     fechaNacimiento: initialData?.fechaNacimiento || '',
     sexo:            initialData?.sexo            || '',
     foto:            initialData?.foto            || '',
   })
+  const [usernameTouched, setUsernameTouched] = useState(!!initialData?.username)
   const [saving, setSaving] = useState(false)
   const [done,   setDone]   = useState(false)
   const [error,  setError]  = useState(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  // Auto-sugerir username si no fue editado manualmente
+  const handleNombreChange = (v) => {
+    set('nombre', v)
+    if (!usernameTouched && v) set('username', suggestUsername(v, form.especie))
+  }
+  const handleEspecieChange = (v) => {
+    set('especie', v)
+    if (!usernameTouched && form.nombre) set('username', suggestUsername(form.nombre, v))
+  }
+
   const selectedSpecies = SPECIES.find(s => s.id === form.especie)
 
   const handleSave = () => {
     if (!form.nombre.trim()) { setError('El nombre es obligatorio.'); return }
     setError(null); setSaving(true)
-    const data = { ...form, nombre: form.nombre.trim() }
-    try { localStorage.setItem(PET_LS_KEY, JSON.stringify(data)) } catch {}
+    const data = {
+      ...form,
+      id:       initialData?.id || genId(),
+      nombre:   form.nombre.trim(),
+      username: (form.username || suggestUsername(form.nombre, form.especie)).trim(),
+    }
+    // Guardar en array de mascotas
+    const pets = loadPets()
+    const idx  = pets.findIndex(p => p.id === data.id)
+    const updated = idx >= 0 ? pets.map((p, i) => i === idx ? data : p) : [...pets, data]
+    savePets(updated)
     setTimeout(() => { setSaving(false); setDone(true); setTimeout(() => onSave?.(data), 700) }, 300)
   }
 
@@ -123,10 +144,21 @@ export default function MyPetForm({ mode = 'welcome', initialData, onSave, onClo
         <input
           autoFocus={mode === 'welcome'}
           value={form.nombre}
-          onChange={e => set('nombre', e.target.value)}
+          onChange={e => handleNombreChange(e.target.value)}
           placeholder="Ej: Tobías, Luna, Max…"
-          style={{ ...inp, marginBottom:16, fontSize:18, fontWeight:600 }}
+          style={{ ...inp, marginBottom:8, fontSize:18, fontWeight:600 }}
         />
+        {/* @username */}
+        <div style={{ display:'flex', alignItems:'center', background:C.bgElevated,
+          border:`1px solid ${C.borderHi}`, borderRadius:12, padding:'10px 14px',
+          marginBottom:16, gap:4 }}>
+          <span style={{ fontFamily:F.body, fontSize:14, color:C.teal, fontWeight:600 }}>@</span>
+          <input value={form.username || ''}
+            onChange={e => { setUsernameTouched(true); set('username', e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,'')) }}
+            placeholder="username_único"
+            style={{ border:'none', background:'none', fontFamily:F.body, fontSize:14,
+              color:C.text, outline:'none', flex:1 }} />
+        </div>
 
         {/* Especie */}
         <div style={{ fontFamily:F.body, fontSize:12, fontWeight:600, color:C.textSub, marginBottom:8 }}>
@@ -134,7 +166,7 @@ export default function MyPetForm({ mode = 'welcome', initialData, onSave, onClo
         </div>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
           {SPECIES.map(s => (
-            <button key={s.id} type="button" onClick={() => set('especie', s.id)} style={{
+            <button key={s.id} type="button" onClick={() => handleEspecieChange(s.id)} style={{
               borderRadius:20, padding:'7px 14px', cursor:'pointer',
               border:`1.5px solid ${form.especie === s.id ? C.accent : C.border}`,
               background: form.especie === s.id ? C.accent + '18' : C.bgElevated,

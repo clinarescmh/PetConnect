@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useTheme, F } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 import PetEdit   from './PetEdit'
 import FamilyTree, { DEMO_RELATIONS } from './FamilyTree'
+import { loadPets, loadFollowing, toggleFollow } from '../lib/pets'
 
 /* ── Mascotas conocidas (para selector de vínculo) ── */
 const ALL_PETS_DEMO = [
@@ -129,11 +130,27 @@ function LinkModal({ fromPet, existingIds, onClose, onLinked }) {
 export default function PetProfile({ post, allPosts = [], onClose }) {
   const { C } = useTheme()
   const [petData,    setPetData]    = useState(post)
-  const [following,  setFollowing]  = useState(false)
   const [shared,     setShared]     = useState(false)
   const [editMode,   setEditMode]   = useState(false)
   const [showLink,   setShowLink]   = useState(false)
-  const [relations,  setRelations]  = useState(DEMO_RELATIONS)
+
+  // Follow state (desde localStorage)
+  const petFollowId = petData.username || String(petData.id ?? 1)
+  const [isFollowing, setIsFollowing] = useState(() => loadFollowing().includes(petFollowId))
+
+  // Construye relaciones: demo + hermanos de hogar automáticos
+  const [extraRels, setExtraRels] = useState(() => {
+    const myPets = loadPets()
+    const petName = petData.name || ''
+    return myPets
+      .filter(p => p.nombre !== petName && p.nombre)
+      .map((p, i) => ({
+        pet1: { id: petData.id ?? 1, name: petName,  photo: petData.photo  },
+        pet2: { id: p.id || 100 + i, name: p.nombre, photo: p.foto || null },
+        type: 'hermano de hogar', status: 'approved',
+      }))
+  })
+  const [relations, setRelations] = useState([...DEMO_RELATIONS, ...extraRels])
 
   const petId    = petData.id ?? 1
   const myRels   = relationsFor(petId, relations)
@@ -222,6 +239,10 @@ export default function PetProfile({ post, allPosts = [], onClose }) {
             <div style={{ fontFamily:F.body, fontSize:13,
               color:'rgba(255,255,255,0.85)', marginTop:3 }}>{petData.breed}</div>
           )}
+          {(petData.username) && (
+            <div style={{ fontFamily:F.body, fontSize:12, fontWeight:600,
+              color:'rgba(255,255,255,0.85)', marginTop:2 }}>@{petData.username}</div>
+          )}
           {petData.sexo && (
             <div style={{ fontFamily:F.body, fontSize:12,
               color:'rgba(255,255,255,0.7)', marginTop:1 }}>{petData.sexo}</div>
@@ -269,7 +290,7 @@ export default function PetProfile({ post, allPosts = [], onClose }) {
             { label:'Me gusta',   value: totalLikes    },
             { label:'Posts',      value: petPosts.length },
             { label:'Vínculos',   value: myRels.filter(r=>r.status==='approved').length },
-            { label:'Seguidores', value: following ? 1 : 0 },
+            { label:'Seguidores', value: isFollowing ? 1 : 0 },
           ].map((s, i) => (
             <div key={i} style={{ flex:1, background:C.bgCard, borderRadius:12,
               border:`1px solid ${C.border}`, padding:'10px 6px', textAlign:'center' }}>
@@ -285,7 +306,7 @@ export default function PetProfile({ post, allPosts = [], onClose }) {
 
         {/* Botones */}
         <div style={{ display:'flex', gap:10, marginBottom:26 }}>
-          <button onClick={() => setFollowing(f => !f)} style={{
+          <button onClick={() => { const upd = toggleFollow(petFollowId); setIsFollowing(upd.includes(petFollowId)); }} style={{
             flex:2,
             background: following ? C.bgElevated : C.accent,
             color:       following ? C.text       : C.bg,
@@ -293,7 +314,7 @@ export default function PetProfile({ post, allPosts = [], onClose }) {
             borderRadius:14, padding:'13px',
             fontFamily:F.display, fontSize:14, fontWeight:700,
             cursor:'pointer', transition:'all 0.2s',
-          }}>{following ? '✓ Siguiendo' : '+ Seguir'}</button>
+          }}>{isFollowing ? '✓ Siguiendo' : '+ Seguir'}</button>
           <button onClick={handleShare} style={{
             flex:1, background:C.bgElevated,
             border:`1px solid ${C.border}`, borderRadius:14, padding:'13px',

@@ -7,6 +7,11 @@ import WalkerForm      from "./components/WalkerForm";
 import PetProfile      from "./components/PetProfile";
 import PetCoinsScreen     from "./components/PetCoinsScreen";
 import MyPetFormComponent from "./components/MyPetForm";
+import OwnerProfile        from "./components/OwnerProfile";
+import CommunityScreen     from "./components/CommunityScreen";
+import GamesScreen         from "./components/GamesScreen";
+import SearchScreen        from "./components/SearchScreen";
+import { loadPets, savePets, genId, loadFollowing, toggleFollow } from "./lib/pets";
 import { PetCoinsProvider, usePetCoins, COINS_ACTIONS } from "./lib/petcoins.jsx";
 import { TabErrorBoundary } from "./components/ErrorBoundary";
 
@@ -44,8 +49,8 @@ const lightColors = {
   border:     "#1B3A6B10",
   borderHi:   "#1B3A6B1A",
   text:       "#1B3A6B",   // azul oscuro brand — color principal
-  textSub:    "#4A6A8A",
-  textMuted:  "#8AAAC0",
+  textSub:    "#3A5878",   // más oscuro para mejor contraste en light mode
+  textMuted:  "#5A7A96",   // era #8AAAC0 — ajustado para pasar WCAG AA
   accent:     "#FF8C00",   // naranja brand completo — solo CTAs importantes
   accentDim:  "#FF8C0018",
   pink:       "#D4347A",
@@ -428,11 +433,16 @@ const makeCard = (C, extra = {}) => ({
 
 /* ── Mock data (fallback si Supabase no responde) ── */
 const mockPets = [
-  { id:1, name:"Tobías", breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿",          time_ago:"2h", tag:"#lavidacanina", photo:"/Golden_retriever.jpeg" },
-  { id:2, name:"Luna",   breed:"Gata Persa",       owner:"Pedro R.", avatar:"🐈", owner_avatar:"👨", likes:267, comments:41, caption:"Reinando el balcón como siempre 👑",              time_ago:"4h", tag:"#catlife",       photo:"/Gato_persa.jpeg"       },
-  { id:3, name:"Max",    breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89,  comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉",    time_ago:"6h", tag:"#perrofeliz",   photo:"/Labrador.jpeg"         },
-  { id:4, name:"Bella",  breed:"Beagle",            owner:"Carlos M.",avatar:"🐕", owner_avatar:"👨", likes:98,  comments:15, caption:"¡Primera competencia de olfato! 🏆 Campeona",   time_ago:"1d", tag:"#beaglelife",   photo:"/Beagle.jpeg"           },
-  { id:5, name:"Coco",   breed:"Conejo",            owner:"Ana R.",   avatar:"🐰", owner_avatar:"👩", likes:134, comments:22, caption:"¿Quién dijo que los conejos no son fotogénicos? 🥕", time_ago:"2d", tag:"#conejito", photo:"/Conejo.jpeg"           },
+  { id:1, name:"Tobías", username:"tobias_golden",  breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿",          time_ago:"2h", tag:"#lavidacanina", photo:"/Golden_retriever.jpeg" },
+  { id:2, name:"Luna",   username:"luna_persa",     breed:"Gata Persa",       owner:"Pedro R.", avatar:"🐈", owner_avatar:"👨", likes:267, comments:41, caption:"Reinando el balcón como siempre 👑",              time_ago:"4h", tag:"#catlife",       photo:"/Gato_persa.jpeg"       },
+  { id:3, name:"Max",    username:"max_labrador",   breed:"Labrador",          owner:"Sofía V.", avatar:"🐶", owner_avatar:"👩‍🦰", likes:89, comments:12, caption:"¡Aprendimos a sentarnos! Mamá orgullosa 🎉",     time_ago:"6h", tag:"#perrofeliz",   photo:"/Labrador.jpeg"         },
+  { id:4, name:"Bella",  username:"bella_beagle",   breed:"Beagle",            owner:"Carlos M.",avatar:"🐕", owner_avatar:"👨", likes:98,  comments:15, caption:"¡Primera competencia de olfato! 🏆 Campeona",   time_ago:"1d", tag:"#beaglelife",   photo:"/Beagle.jpeg"           },
+  { id:5, name:"Coco",   username:"coco_bunny",     breed:"Conejo",            owner:"Ana R.",   avatar:"🐰", owner_avatar:"👩", likes:134, comments:22, caption:"¿Quién dijo que los conejos no son fotogénicos? 🥕", time_ago:"2d", tag:"#conejito", photo:"/Conejo.jpeg"           },
+  /* Video posts — URLs de muestra públicas (reemplazar con videos reales de mascotas) */
+  { id:6, name:"Nala",  username:"nala_husky",     breed:"Husky Siberiano",   owner:"Laura M.", avatar:"🐺", owner_avatar:"👩", likes:312, comments:47, caption:"Primera nevada de invierno ❄️🐺 ¡No hay como la nieve!", time_ago:"3h", tag:"#huskylife",
+    video:"https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4", photo:"/Dog3.jpeg" },
+  { id:7, name:"Simba", username:"simba_golden",   breed:"Golden Retriever",  owner:"Juan P.",  avatar:"🐕", owner_avatar:"👨", likes:189, comments:23, caption:"¡Mi primer día en la piscina! 🏊‍♂️🐶 Ni modo que me gustó… 😂", time_ago:"1d", tag:"#goldenretrievers",
+    video:"https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", photo:"/Dog4.jpeg" },
 ];
 const mockVets = [
   { id:1, name:"Clínica PetCare",  distance:"0.8 km", rating:4.8, open:true, specialty:"General",   icon:"🏥", urgent:false },
@@ -701,9 +711,9 @@ const QUICK_ITEMS = [
   { id:"vets",      emoji:"🏥", label:"Vets",       mainTab:"more"    },
   { id:"stores",    emoji:"🛒", label:"Tiendas",    mainTab:"more"    },
   { id:"walkers",   emoji:"🦮", label:"Paseadores", mainTab:"walkers" },
-  { id:"adoption",  emoji:"🏠", label:"Adopción",   mainTab:"more"    },
-  { id:"lodging",   emoji:"🏡", label:"Alojamiento",mainTab:"more"    },
-  { id:"breeding",  emoji:"💕", label:"Cruzas",     mainTab:"more"    },
+  { id:"adoption",  emoji:"❤️", label:"Adóptame",      mainTab:"more"    },
+  { id:"lodging",   emoji:"🏨", label:"Hotel Pet",     mainTab:"more"    },
+  { id:"breeding",  emoji:"💕", label:"Encuentra Amor",mainTab:"more"    },
   { id:"lost",      emoji:"📍", label:"Perdidos",   mainTab:"lost"    },
 ];
 
@@ -761,14 +771,15 @@ function QuickNav({ currentTab, currentSub, onNavigate }) {
 }
 
 /* ── Header ── */
-function Header({ tab, onBack, onNotif, unread, onCoinsClick }) {
+function Header({ tab, onBack, onNotif, unread, onCoinsClick, onSearch }) {
   const { C, isDark, toggleTheme } = useTheme();
   const { coins } = usePetCoins();
   const titles = {
     feed:"PetConnect", walkers:"Paseos & Cuidado", health:"Historial Médico",
     lost:"Mascotas Perdidas", more:"Servicios", vets:"Veterinarios",
     stores:"Tiendas", breeding:"Comunidad", store:"PetStore",
-    adoption:"Adopción", lodging:"Alojamiento", notifications:"Notificaciones",
+    adoption:"Adóptame ❤️", lodging:"Hotel Pet 🏨", notifications:"Notificaciones",
+    community:"Comunidad 💬", games:"Juegos 🎮",
     petcoins:"PetCoins",
   };
   return (
@@ -781,6 +792,10 @@ function Header({ tab, onBack, onNotif, unread, onCoinsClick }) {
         <span style={{ fontFamily:F.display, fontWeight:800, fontSize:18, color:C.text, letterSpacing:-0.5 }}>{titles[tab] || "PetConnect"}</span>
       </div>
       <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+        {/* Botón búsqueda */}
+        <button onClick={onSearch} style={{ background:C.bgElevated, border:`1px solid ${C.border}`,
+          borderRadius:10, width:34, height:34, display:"flex", alignItems:"center",
+          justifyContent:"center", cursor:"pointer", fontSize:16 }}>🔍</button>
         {/* Widget PetCoins */}
         <button onClick={onCoinsClick} style={{
           display:"flex", alignItems:"center", gap:4,
@@ -1027,8 +1042,10 @@ function Stories() {
 function PostCard({ post, onPetClick }) {
   const { C } = useTheme();
   const { addCoins } = usePetCoins();
-  const [liked, setLiked] = useState(false);
-  const [burst, setBurst] = useState(false);
+  const [liked,     setLiked]     = useState(false);
+  const [burst,     setBurst]     = useState(false);
+  const petFollowId = post.username || String(post.id);
+  const [following, setFollowing] = useState(() => loadFollowing().includes(petFollowId));
 
   const handleLike = () => {
     if (!liked) {
@@ -1051,7 +1068,7 @@ function PostCard({ post, onPetClick }) {
             <Avatar emoji={post.avatar} size={42} color={C.bgElevated} ring={C.accent} />
             <div style={{ position:"absolute", bottom:-3, right:-3, width:20, height:20, borderRadius:7, background:C.bgCard, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, border:`1px solid ${C.border}` }}>{post.owner_avatar}</div>
           </div>
-          <div>
+          <div style={{ flex:1 }}>
             <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14, color:C.text }}>
               {post.name || post.breed || "Mascota"}
             </div>
@@ -1059,17 +1076,45 @@ function PostCard({ post, onPetClick }) {
               {[post.name && post.breed ? post.breed : null, post.owner, post.time_ago]
                 .filter(Boolean).join(" · ")}
             </div>
+            {post.username && (
+              <div style={{ fontFamily:F.body, fontSize:10, color:C.teal, marginTop:1 }}>
+                @{post.username}
+              </div>
+            )}
           </div>
         </div>
+        {/* Botón seguir / siguiendo */}
+        <button onClick={e => { e.stopPropagation(); const upd = toggleFollow(petFollowId); setFollowing(upd.includes(petFollowId)); }} style={{
+          background: following ? C.teal + "18" : C.bgElevated,
+          border: `1px solid ${following ? C.teal + "55" : C.border}`,
+          borderRadius: 20, padding:"4px 10px", cursor:"pointer",
+          fontFamily:F.body, fontSize:10, fontWeight:600,
+          color: following ? C.teal : C.textSub, whiteSpace:"nowrap",
+          transition:"all 0.15s",
+        }}>
+          {following ? "✓ Siguiendo" : "+ Seguir"}
+        </button>
         <button style={{ background:"none", border:"none", color:C.textMuted, cursor:"pointer", fontSize:18 }}>⋯</button>
       </div>
-      {/* Foto del post — usa post.photo (mock local) o post.foto (Supabase).
-          El fallback solo aparece si ninguno de los dos existe. */}
-      {(post.photo || post.foto) ? (
+      {/* Media: video o foto */}
+      {post.video ? (
+        <div style={{ position:"relative" }}>
+          <video
+            src={post.video}
+            autoPlay muted loop playsInline
+            poster={post.photo || post.foto || undefined}
+            style={{ width:"100%", height:300, objectFit:"cover", display:"block", cursor:"pointer" }}
+            onClick={e => { e.target.paused ? e.target.play() : e.target.pause() }}
+          />
+          <div style={{ position:"absolute", top:10, right:10, background:"rgba(0,0,0,0.5)",
+            borderRadius:8, padding:"3px 8px", fontFamily:F.body, fontSize:11,
+            fontWeight:600, color:"#fff" }}>🎥 Video</div>
+        </div>
+      ) : (post.photo || post.foto) ? (
         <img
           src={post.photo || post.foto}
           alt={post.name ?? "foto"}
-          style={{ width:"100%", height:240, objectFit:"cover", display:"block" }}
+          style={{ width:"100%", height:240, objectFit:"cover", objectPosition:"center 20%", display:"block" }}
         />
       ) : (
         <div style={{ margin:"0 14px 12px", borderRadius:14, height:180,
@@ -1116,6 +1161,13 @@ function FeedTab() {
   const { C, openPetProfile } = useTheme();
   const { addCoins } = usePetCoins();
   const posts = mockPets;
+  const [feedFilter, setFeedFilter] = useState("Todos");
+
+  const filteredPosts = feedFilter === "Fotos"
+    ? posts.filter(p => !p.video && (p.photo || p.foto))
+    : feedFilter === "Videos"
+      ? posts.filter(p => !!p.video)
+      : posts;
 
   return (
     <div>
@@ -1135,6 +1187,23 @@ function FeedTab() {
       </div>
       <Stories />
 
+      {/* ── Filtro Fotos / Videos ── */}
+      <div style={{ display:"flex", gap:8, padding:"0 16px 12px" }}>
+        {["Todos","Fotos 📷","Videos 🎥"].map(f => {
+          const key = f.split(" ")[0];
+          const active = feedFilter === key;
+          return (
+            <button key={key} onClick={() => setFeedFilter(key)} style={{
+              borderRadius:20, padding:"6px 14px", cursor:"pointer",
+              background: active ? C.accent + "18" : C.bgElevated,
+              border: `1.5px solid ${active ? C.accent + "88" : C.border}`,
+              fontFamily:F.body, fontSize:12, fontWeight:600,
+              color: active ? C.accent : C.textSub, transition:"all 0.15s",
+            }}>{f}</button>
+          );
+        })}
+      </div>
+
       {/* ── Reto de la Semana ── */}
       <WeeklyChallenge />
 
@@ -1143,14 +1212,26 @@ function FeedTab() {
         <div style={{ background:C.bgElevated, borderRadius:16, padding:"12px 14px", display:"flex", alignItems:"center", gap:10, border:`1px solid ${C.border}` }}>
           <Avatar emoji="🐕" size={36} color={C.bgCard} />
           <div style={{ flex:1, fontFamily:F.body, fontSize:13, color:C.textMuted }}>¿Qué está haciendo tu mascota?</div>
-          <span style={{ fontSize:20, cursor:"pointer" }}>📷</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={() => addCoins("POST_PHOTO")} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20 }}>📷</button>
+            <button style={{ background:"none", border:"none", cursor:"pointer", fontSize:20 }}>🎥</button>
+          </div>
         </div>
       </div>
 
-      {/* Posts */}
-      {posts.map(p => (
+      {/* Posts filtrados */}
+      {filteredPosts.map(p => (
         <PostCard key={p.id} post={p} onPetClick={() => openPetProfile(p)} />
       ))}
+      {filteredPosts.length === 0 && (
+        <div style={{ textAlign:"center", padding:"40px 0" }}>
+          <div style={{ fontSize:48 }}>{feedFilter === "Videos" ? "🎥" : "📷"}</div>
+          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:15,
+            color:C.textSub, marginTop:10 }}>
+            Sin {feedFilter.toLowerCase()} por ahora
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1239,16 +1320,18 @@ function WalkersTab({ onRegisterWalker }) {
 /* ── Health Tab ── */
 function HealthTab() {
   const { C } = useTheme();
-  const [section, setSection] = useState("pasaporte");
-  const [showEditPet, setShowEditPet] = useState(false);
-  const [myPet, setMyPet] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("petconnect_my_pet") || "null") }
-    catch { return null }
-  });
+  const [section,      setSection]      = useState("pasaporte");
+  const [pets,         setPetsState]    = useState(() => loadPets());
+  const [activePetIdx, setActivePetIdx] = useState(0);
+  const [showEditPet,  setShowEditPet]  = useState(false);
+  const [showAddPet,   setShowAddPet]   = useState(false);
+
+  const myPet = pets[activePetIdx] || null;
   const sColors = { ok:C.accent, soon:C.amber, overdue:C.red };
   const sLabels = { ok:"Al día", soon:"Próximo", overdue:"Vencido" };
 
-  // Calcular edad a partir de fecha de nacimiento
+  const refreshPets = () => setPetsState(loadPets());
+
   const age = myPet?.fechaNacimiento
     ? (() => {
         const months = (new Date() - new Date(myPet.fechaNacimiento)) / (1000 * 60 * 60 * 24 * 30.44);
@@ -1258,15 +1341,43 @@ function HealthTab() {
 
   return (
     <div style={{ padding:"16px" }}>
-      {/* Formulario de edición de mascota */}
-      {showEditPet && (
+      {/* Formularios de edición / nueva mascota */}
+      {(showEditPet || showAddPet) && (
         <MyPetFormComponent
           mode="edit"
-          initialData={myPet}
-          onSave={data => { setMyPet(data); setShowEditPet(false); }}
-          onClose={() => setShowEditPet(false)}
+          initialData={showEditPet ? myPet : null}
+          onSave={() => { refreshPets(); setShowEditPet(false); setShowAddPet(false); }}
+          onClose={() => { setShowEditPet(false); setShowAddPet(false); }}
         />
       )}
+
+      {/* Tabs de mascotas */}
+      <div style={{ display:"flex", gap:6, overflowX:"auto", scrollbarWidth:"none",
+        marginBottom:14, paddingBottom:2 }}>
+        {pets.map((pet, i) => (
+          <button key={pet.id || i} onClick={() => setActivePetIdx(i)} style={{
+            flexShrink:0, display:"flex", alignItems:"center", gap:5,
+            background: i === activePetIdx ? C.accent + "18" : C.bgElevated,
+            border:`1.5px solid ${i === activePetIdx ? C.accent : C.border}`,
+            borderRadius:20, padding:"5px 12px 5px 8px", cursor:"pointer",
+            transition:"all 0.15s",
+          }}>
+            {pet.foto
+              ? <img src={pet.foto} style={{ width:20, height:20, borderRadius:"50%", objectFit:"cover" }} alt="" />
+              : <span style={{ fontSize:16 }}>🐾</span>
+            }
+            <span style={{ fontFamily:F.body, fontSize:12, fontWeight:600,
+              color: i === activePetIdx ? C.accent : C.text }}>
+              {pet.nombre}
+            </span>
+          </button>
+        ))}
+        <button onClick={() => setShowAddPet(true)} style={{
+          flexShrink:0, background:C.bgElevated, border:`1.5px dashed ${C.border}`,
+          borderRadius:20, padding:"5px 12px", cursor:"pointer",
+          fontFamily:F.body, fontSize:12, fontWeight:600, color:C.textMuted,
+        }}>+ Agregar</button>
+      </div>
 
       {/* Header de mascota — datos reales o placeholder */}
       <div style={{ background:`linear-gradient(135deg, ${C.blue}22, ${C.blue}08)`, border:`1px solid ${C.blue}33`, borderRadius:18, padding:"16px", marginBottom:16, display:"flex", alignItems:"center", gap:14 }}>
@@ -1465,7 +1576,7 @@ function AdoptionTab() {
             background:`linear-gradient(135deg, ${C.purple}18, ${C.purple}06)` }}>
             {p.photo ? (
               <img src={p.photo} alt={p.name}
-                style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center 20%", display:"block" }} />
             ) : (
               <div style={{ height:"100%", display:"flex", alignItems:"center",
                 justifyContent:"center", fontSize:76 }}>{p.avatar}</div>
@@ -1570,16 +1681,18 @@ function LodgingTab() {
 }
 
 /* ── More Tab ── */
-function MoreTab({ onNavigate, onRegisterBusiness }) {
+function MoreTab({ onNavigate, onRegisterBusiness, onOpenOwnerProfile }) {
   const { C } = useTheme();
   const { coins } = usePetCoins();
   const items = [
     { id:"petcoins",  icon:"🪙", label:"PetCoins",    desc:`${coins.toLocaleString()} monedas · Recompensas`, color:C.amber  },
-    { id:"adoption",  icon:"🏠", label:"Adopción",    desc:"Mascotas buscan hogar hoy",    color:C.purple },
-    { id:"lodging",   icon:"🏡", label:"Alojamiento", desc:"Casas y hoteles pet-friendly", color:C.blue   },
+    { id:"adoption",  icon:"❤️", label:"Adóptame ❤️",        desc:"Mascotas buscan hogar hoy",    color:C.purple },
+    { id:"lodging",   icon:"🏨", label:"Hotel Pet 🏨",       desc:"Casas y hoteles pet-friendly", color:C.blue   },
     { id:"vets",      icon:"🏥", label:"Veterinarios",desc:"Clínicas y urgencias 24h",     color:C.red    },
     { id:"stores",    icon:"🛒", label:"Tiendas",     desc:"Alimentos y accesorios cerca", color:C.teal   },
-    { id:"breeding",  icon:"💕", label:"Cruzas",      desc:"Conecta con dueños responsables", color:C.pink },
+    { id:"breeding",   icon:"💕", label:"Encuentra tu Amor 💕", desc:"Conecta con dueños responsables", color:C.pink   },
+    { id:"community",  icon:"💬", label:"Consultas 💬",         desc:"Foro de preguntas y denuncias",   color:C.blue   },
+    { id:"games",      icon:"🎮", label:"Juegos 🎮",             desc:"Trivia y retos con PetCoins",     color:C.purple },
     { id:"store",     icon:"🏪", label:"PetStore",    desc:"Compras con envío a domicilio", color:C.accent },
   ];
   return (
@@ -1604,6 +1717,25 @@ function MoreTab({ onNavigate, onRegisterBusiness }) {
           ))}
         </div>
       </div>
+      {/* Mi perfil de dueño */}
+      <button onClick={onOpenOwnerProfile} style={{
+        width:"100%", marginBottom:12,
+        background:`linear-gradient(135deg, ${C.blue}18, ${C.blue}08)`,
+        border:`1px solid ${C.blue}33`, borderRadius:18, padding:"16px 18px",
+        display:"flex", alignItems:"center", gap:14, cursor:"pointer", textAlign:"left",
+      }}>
+        <div style={{ width:48, height:48, borderRadius:14, background:C.blue + "22",
+          display:"flex", alignItems:"center", justifyContent:"center", fontSize:24 }}>👤</div>
+        <div>
+          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:15, color:C.text }}>
+            Mi Perfil de Dueño
+          </div>
+          <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub, marginTop:2 }}>
+            Editar nombre, foto y bio
+          </div>
+        </div>
+      </button>
+
       {/* CTA registro negocio */}
       <div onClick={onRegisterBusiness} style={{
         background: `linear-gradient(135deg, ${C.accent}22, ${C.accent}08)`,
@@ -2140,7 +2272,9 @@ export default function PetConnect({ isDark, toggleTheme }) {
   const [subTab,         setSubTab]         = useState(null);
   const [showNotif,      setShowNotif]      = useState(false);
   const [modal,          setModal]          = useState(null);       // null | 'business' | 'walker'
-  const [petProfileData, setPetProfileData] = useState(null);      // mascota abierta globalmente
+  const [petProfileData,  setPetProfileData]  = useState(null);
+  const [showOwnerProfile, setShowOwnerProfile] = useState(false);
+  const [showSearch,       setShowSearch]       = useState(false);
   const unreadCount = mockNotifications.filter(n => n.unread).length;
   const C = isDark ? darkColors : lightColors;
   const openModal      = setModal;
@@ -2153,7 +2287,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
     walkers:       <WalkersTab onRegisterWalker={() => openModal("walker")} />,
     health:        <HealthTab />,
     lost:          <LostTab />,
-    more:          <MoreTab onNavigate={id => setSubTab(id)} onRegisterBusiness={() => openModal("business")} />,
+    more:          <MoreTab onNavigate={id => setSubTab(id)} onRegisterBusiness={() => openModal("business")} onOpenOwnerProfile={() => setShowOwnerProfile(true)} />,
     vets:          <VetsTab />,
     stores:        <StoresTab />,
     breeding:      <BreedingTab />,
@@ -2161,7 +2295,9 @@ export default function PetConnect({ isDark, toggleTheme }) {
     adoption:      <AdoptionTab />,
     lodging:       <LodgingTab />,
     notifications: <NotificationsTab />,
-    petcoins:      <PetCoinsScreen onClose={() => setSubTab(null)} />,
+    petcoins:      <PetCoinsScreen  onClose={() => setSubTab(null)} />,
+    community:     <CommunityScreen onClose={() => setSubTab(null)} />,
+    games:         <GamesScreen     onClose={() => setSubTab(null)} />,
   };
 
   const handleBack = () => {
@@ -2174,7 +2310,22 @@ export default function PetConnect({ isDark, toggleTheme }) {
   return (
     <ThemeContext.Provider value={{ C, isDark, toggleTheme, openModal, openPetProfile }}>
     <PetCoinsProvider>
-      {/* ── Perfil de mascota global (accesible desde cualquier tab) ── */}
+      {/* ── Pantalla de búsqueda ── */}
+      {showSearch && (
+        <SearchScreen
+          onClose={() => setShowSearch(false)}
+          onOpenPet={pet => { setShowSearch(false); setPetProfileData(pet); }}
+        />
+      )}
+      {/* ── Perfil de dueño ── */}
+      {showOwnerProfile && (
+        <OwnerProfile
+          onClose={() => setShowOwnerProfile(false)}
+          onOpenPet={pet => { setShowOwnerProfile(false); setPetProfileData(pet); }}
+          onAddPet={() => setShowOwnerProfile(false)}
+        />
+      )}
+      {/* ── Perfil de mascota global ── */}
       {petProfileData && (
         <PetProfile
           post={petProfileData}
@@ -2217,6 +2368,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
             onNotif={() => { setShowNotif(!showNotif); setSubTab(null); }}
             unread={unreadCount}
             onCoinsClick={() => { setSubTab("petcoins"); setShowNotif(false); }}
+            onSearch={() => setShowSearch(true)}
           />
           {!showNotif && (
             <QuickNav

@@ -4,7 +4,8 @@ import './index.css'
 import PetConnect    from './App.jsx'
 import LoginScreen   from './LoginScreen.jsx'
 import Onboarding    from './components/Onboarding.jsx'
-import MyPetForm, { PET_LS_KEY } from './components/MyPetForm.jsx'
+import MyPetForm from './components/MyPetForm.jsx'
+import { loadPets } from './lib/pets.js'
 import SetupScreen   from './components/SetupScreen.jsx'
 
 const OB_KEY = 'petconnect_onboarding_done'
@@ -42,7 +43,7 @@ function Root() {
   const [isDark,     setIsDark]     = useState(false)
   const toggleTheme = () => setIsDark(v => !v)
 
-  const hasPet = () => !!localStorage.getItem(PET_LS_KEY)
+  const hasPet = () => loadPets().length > 0
 
   /* Cuando el invitado accede: si es la primera vez, mostrar form de mascota */
   const handleGuestAccess = () => {
