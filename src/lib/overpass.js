@@ -262,57 +262,62 @@ export async function fetchNearbyVets(lat, lon) {
 }
 
 /**
- * Busca tiendas de mascotas con múltiples términos de búsqueda.
- * Intenta bounding box 10 km, expande a 25 km si no hay resultados.
+ * Busca tiendas de mascotas Y peluquerías caninas en paralelo.
+ *
+ * Diseño:
+ *  - Un solo bbox de 25 km (no loop, sin early-return por tipo)
+ *  - Tiendas y peluquerías se buscan en el MISMO lote paralelo
+ *  - bounded=1 → restringe estrictamente al bbox (evita resultados lejanos)
+ *  - Filtro adicional: descartar cualquier resultado > 30 km (por si bounded falla)
+ *  - Todos los resultados se combinan, deduplicados y ordenados por distancia
  */
 export async function fetchNearbyPetShops(lat, lon) {
   console.log('[nominatim] fetchNearbyPetShops', lat.toFixed(4), lon.toFixed(4))
-  const ctrl = new AbortController()
-  const safety = setTimeout(() => ctrl.abort(), 25_000)
+  const ctrl    = new AbortController()
+  const safety  = setTimeout(() => ctrl.abort(), 25_000)
+  const MAX_KM  = 30   // descarta resultados a más de 30 km
+  const bbox    = makeBbox(lat, lon, 25)
+
+  // ── Queries ────────────────────────────────────────────────────────────────
+  // Tiendas: 'mascotas' y 'pet' capturan nombres reales (PetZoo, Mundo Mascotas…)
+  //          ya que en OSM Chile no hay tiendas llamadas "Tienda Mascotas"
+  // Peluquerías: confirmadas con WebFetch — devuelven 5+ resultados reales en CL
+  const TIENDA_Q  = ['mascotas',          'pet',            'animales']
+  const PELUCA_Q  = ['peluqueria canina', 'baño corte perros', 'estetica canina']
 
   try {
-    for (const km of [10, 25]) {
-      try {
-        const bbox = makeBbox(lat, lon, km)
+    const settled = await Promise.allSettled([
+      // Tiendas — bounded=1 (estricto, no queremos resultados de otras ciudades)
+      ...TIENDA_Q.map(q =>
+        searchNominatim({ q, viewbox: bbox, bounded: '1', limit: '12' }, ctrl.signal)
+          .catch(() => [])
+      ),
+      // Peluquerías — bounded=1 también; el filtro de 30km es el net de seguridad
+      ...PELUCA_Q.map(q =>
+        searchNominatim({ q, viewbox: bbox, bounded: '1', limit: '12' }, ctrl.signal)
+          .catch(() => [])
+      ),
+    ])
 
-        // Queries confirmadas en producción — sin "santiago" en q (lo filtra countrycodes=cl)
-        // bounded=0: prefiere resultados en viewbox pero no los restringe estrictamente
-        const QUERIES = [
-          'peluqueria canina',   // ← confirmado: devuelve 5+ resultados reales en CL
-          'tienda mascotas',
-          'baño corte perros',
-          'estetica canina',
-          'peluqueria perros',
-          'pet shop',
-        ]
-        const settled = await Promise.allSettled(
-          QUERIES.map(q =>
-            searchNominatim({ q, viewbox: bbox, bounded: '0', limit: '15' }, ctrl.signal)
-              .catch(() => [])
-          )
-        )
-        const allItems = settled.flatMap(r => r.status === 'fulfilled' ? r.value : [])
+    const allItems = settled.flatMap(r => r.status === 'fulfilled' ? r.value : [])
+    console.log('[nominatim] stores raw (tiendas+peluquerías):', allItems.length)
 
-        console.log('[nominatim] stores encontradas (raw):', allItems.length, `(radio ${km}km)`)
+    // Dedup por place_id
+    const seen = new Set()
+    const unique = allItems.filter(i => {
+      if (seen.has(i.place_id)) return false
+      seen.add(i.place_id)
+      return true
+    })
 
-        // Dedup por place_id
-        const seen = new Set()
-        const unique = allItems.filter(i => {
-          if (seen.has(i.place_id)) return false
-          seen.add(i.place_id)
-          return true
-        })
+    clearTimeout(safety)
 
-        const results = unique.map(i => toStore(i, lat, lon))
-          .filter(Boolean)
-          .sort((a, b) => a.distanceKm - b.distanceKm)
+    return unique
+      .map(i => toStore(i, lat, lon))
+      .filter(Boolean)
+      .filter(s => s.distanceKm <= MAX_KM)   // ← descarta > 30 km
+      .sort((a, b) => a.distanceKm - b.distanceKm)
 
-        if (results.length > 0) { clearTimeout(safety); return results }
-      } catch (err) {
-        if (err?.name === 'AbortError') throw err
-        console.warn('[nominatim] stores error en radio', km, ':', err?.message)
-      }
-    }
   } finally {
     clearTimeout(safety)
   }
