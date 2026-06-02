@@ -1787,7 +1787,7 @@ function VetsTab() {
   );
 }
 
-const STORE_FILTERS = ["Todos", "Tienda", "Grooming", "Acuarios"];
+const STORE_FILTERS = ["Todos", "Tienda", "Peluquería", "Acuarios"];
 
 function StoresTab() {
   const { C } = useTheme();
@@ -1853,7 +1853,7 @@ function StoresTab() {
     const matchCat =
       cat === "Todos"    ? true :
       cat === "Tienda"   ? type.includes("mascota") || type.includes("Animal") || type.includes("Alimento") :
-      cat === "Grooming" ? type.includes("room") :
+      cat === "Peluquería" ? (type.includes("Grooming") || type.includes("Peluquer")) :
       cat === "Acuarios" ? type.includes("cua") :
       true;
     return matchSearch && matchCat;

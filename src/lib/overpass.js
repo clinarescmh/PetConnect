@@ -166,17 +166,49 @@ function toVet(item, uLat, uLon) {
   } catch { return null }
 }
 
+/** Detecta el tipo de tienda por tags OSM y luego por palabras clave en el nombre */
+function detectStoreType(item) {
+  const tags = item.tags || {}
+
+  // 1. OSM shop tag — más preciso
+  const OSM_MAP = {
+    pet:       'Tienda de mascotas',
+    pet_food:  'Alimentos para mascotas',
+    groomer:   'Peluquería & Grooming',
+    aquarium:  'Peces & acuarios',
+    animal:    'Animales & accesorios',
+  }
+  if (tags.shop && OSM_MAP[tags.shop]) return OSM_MAP[tags.shop]
+
+  // 2. Palabras clave en nombre/display_name — cubre el caso chileno
+  const haystack = [
+    item.namedetails?.name,
+    item.address?.amenity,
+    item.address?.shop,
+    item.display_name,
+  ].filter(Boolean).join(' ').toLowerCase()
+
+  const GROOMING_KW = [
+    'peluquer', 'baño y corte', 'baño corte', 'estética', 'estetica',
+    'grooming', 'spa canin', 'corte canin', 'belleza canin',
+  ]
+  if (GROOMING_KW.some(kw => haystack.includes(kw))) return 'Peluquería & Grooming'
+
+  return 'Tienda de mascotas'
+}
+
 function toStore(item, uLat, uLon) {
   try {
     const lat = parseFloat(item.lat)
     const lon = parseFloat(item.lon)
     if (!isFinite(lat) || !isFinite(lon)) return null
     const km = distanceKm(uLat, uLon, lat, lon)
+    const storeType = detectStoreType(item)
     return {
       id:          item.place_id,
       name:        extractName(item),
-      type:        'Tienda de mascotas',
-      icon:        '🐾',
+      type:        storeType,
+      icon:        storeType.includes('Grooming') ? '✂️' : '🐾',
       discount:    null,
       phone:       null,
       address:     extractAddress(item),
@@ -243,22 +275,24 @@ export async function fetchNearbyPetShops(lat, lon) {
       try {
         const bbox = makeBbox(lat, lon, km)
 
-        // Búsquedas secuenciales para respetar rate limit 1 req/s
-        const allItems = []
-        for (const q of ['tienda mascotas', 'peluquería canina', 'pet shop']) {
-          try {
-            const items = await searchNominatim(
-              { q, viewbox: bbox, bounded: '1', limit: '15' },
-              ctrl.signal
-            )
-            allItems.push(...items)
-          } catch (err) {
-            if (err?.name === 'AbortError') throw err
-            console.warn('[nominatim] stores error para q="' + q + '":', err?.message)
-          }
-          // Pequeña pausa para respetar rate limit de Nominatim
-          await new Promise(r => setTimeout(r, 300))
-        }
+        // Queries en paralelo (conjunto reducido para respetar rate limit de Nominatim)
+        // Los 5 términos chilenos de grooming se ejecutan junto a tiendas generales
+        const QUERIES = [
+          'tienda mascotas',
+          'pet shop',
+          'peluqueria canina santiago',
+          'baño corte mascotas santiago',
+          'estetica canina santiago',
+          'grooming mascotas santiago',
+          'peluqueria perros santiago',
+        ]
+        const settled = await Promise.allSettled(
+          QUERIES.map(q =>
+            searchNominatim({ q, viewbox: bbox, bounded: '0', limit: '10' }, ctrl.signal)
+              .catch(() => [])
+          )
+        )
+        const allItems = settled.flatMap(r => r.status === 'fulfilled' ? r.value : [])
 
         console.log('[nominatim] stores encontradas (raw):', allItems.length, `(radio ${km}km)`)
 
