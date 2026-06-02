@@ -6,7 +6,7 @@ export const F = {
 }
 
 export const ThemeContext = createContext({
-  C: {}, isDark: true, toggleTheme: () => {}, openModal: () => {},
+  C: {}, isDark: true, toggleTheme: () => {}, openModal: () => {}, openPetProfile: () => {},
 })
 
 export const useTheme = () => useContext(ThemeContext)

@@ -634,13 +634,14 @@ function NavBar({ active, setActive, notifCount }) {
 
 /* ── QuickNav ── */
 const QUICK_ITEMS = [
-  { id:"vets",     emoji:"🏥", label:"Vets",       mainTab:"more"    },
-  { id:"stores",   emoji:"🛒", label:"Tiendas",    mainTab:"more"    },
-  { id:"walkers",  emoji:"🦮", label:"Paseadores", mainTab:"walkers" },
-  { id:"adoption", emoji:"🏠", label:"Adopción",   mainTab:"more"    },
-  { id:"lodging",  emoji:"🏡", label:"Alojamiento",mainTab:"more"    },
-  { id:"breeding", emoji:"💕", label:"Cruzas",     mainTab:"more"    },
-  { id:"lost",     emoji:"📍", label:"Perdidos",   mainTab:"lost"    },
+  { id:"mymascota", emoji:"🐾", label:"Mi Mascota", mainTab:"feed"    },
+  { id:"vets",      emoji:"🏥", label:"Vets",       mainTab:"more"    },
+  { id:"stores",    emoji:"🛒", label:"Tiendas",    mainTab:"more"    },
+  { id:"walkers",   emoji:"🦮", label:"Paseadores", mainTab:"walkers" },
+  { id:"adoption",  emoji:"🏠", label:"Adopción",   mainTab:"more"    },
+  { id:"lodging",   emoji:"🏡", label:"Alojamiento",mainTab:"more"    },
+  { id:"breeding",  emoji:"💕", label:"Cruzas",     mainTab:"more"    },
+  { id:"lost",      emoji:"📍", label:"Perdidos",   mainTab:"lost"    },
 ];
 
 function QuickNav({ currentTab, currentSub, onNavigate }) {
@@ -997,17 +998,11 @@ function PostCard({ post, onPetClick }) {
 }
 
 function FeedTab() {
-  const { C } = useTheme();
+  const { C, openPetProfile } = useTheme();
   const posts = mockPets;
-  const [petProfile, setPetProfile] = useState(null);
 
   return (
     <div>
-      {/* ── Perfil de mascota (overlay) ── */}
-      {petProfile && (
-        <PetProfile post={petProfile} allPosts={posts} onClose={() => setPetProfile(null)} />
-      )}
-
       {/* Check-in diario */}
       <div style={{ margin:"14px 16px", background:`linear-gradient(135deg, ${C.accent}18, ${C.accent}06)`, border:`1px solid ${C.accent}33`, borderRadius:16, padding:"14px 16px", display:"flex", alignItems:"center", gap:12 }}>
         <div style={{ fontSize:28 }}>🌤️</div>
@@ -1038,7 +1033,7 @@ function FeedTab() {
 
       {/* Posts */}
       {posts.map(p => (
-        <PostCard key={p.id} post={p} onPetClick={() => setPetProfile(p)} />
+        <PostCard key={p.id} post={p} onPetClick={() => openPetProfile(p)} />
       ))}
     </div>
   );
@@ -1969,13 +1964,15 @@ function StoreTab() {
 
 /* ── Root ── */
 export default function PetConnect({ isDark, toggleTheme }) {
-  const [activeTab, setActiveTab] = useState("feed");
-  const [subTab, setSubTab] = useState(null);
-  const [showNotif, setShowNotif] = useState(false);
-  const [modal, setModal] = useState(null); // null | 'business' | 'walker'
+  const [activeTab,      setActiveTab]      = useState("feed");
+  const [subTab,         setSubTab]         = useState(null);
+  const [showNotif,      setShowNotif]      = useState(false);
+  const [modal,          setModal]          = useState(null);       // null | 'business' | 'walker'
+  const [petProfileData, setPetProfileData] = useState(null);      // mascota abierta globalmente
   const unreadCount = mockNotifications.filter(n => n.unread).length;
   const C = isDark ? darkColors : lightColors;
-  const openModal = setModal;
+  const openModal      = setModal;
+  const openPetProfile = setPetProfileData;
 
   const currentTab = showNotif ? "notifications" : (subTab || activeTab);
 
@@ -2002,7 +1999,15 @@ export default function PetConnect({ isDark, toggleTheme }) {
   const needsBack = showNotif || !!subTab;
 
   return (
-    <ThemeContext.Provider value={{ C, isDark, toggleTheme, openModal }}>
+    <ThemeContext.Provider value={{ C, isDark, toggleTheme, openModal, openPetProfile }}>
+      {/* ── Perfil de mascota global (accesible desde cualquier tab) ── */}
+      {petProfileData && (
+        <PetProfile
+          post={petProfileData}
+          allPosts={mockPets}
+          onClose={() => setPetProfileData(null)}
+        />
+      )}
       {/* Modales de registro (full-screen) */}
       {modal === "business" && (
         <div style={{ position:"fixed", inset:0, zIndex:300, background:C.bg, overflowY:"auto" }}>
@@ -2044,6 +2049,11 @@ export default function PetConnect({ isDark, toggleTheme }) {
               currentSub={subTab}
               onNavigate={item => {
                 setShowNotif(false);
+                // "Mi Mascota" → abre perfil de Tobías desde cualquier tab
+                if (item.id === "mymascota") {
+                  openPetProfile(mockPets[0]);
+                  return;
+                }
                 if (item.mainTab === "walkers" || item.mainTab === "lost") {
                   setActiveTab(item.mainTab);
                   setSubTab(null);
