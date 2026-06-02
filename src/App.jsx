@@ -35,28 +35,31 @@ const darkColors = {
 };
 
 const lightColors = {
-  bg:        "#EEF2F7",   // azul-gris muy claro
-  bgCard:    "#FFFFFF",
-  bgElevated:"#E1E8F0",
-  border:    "#1B3A6B14",
-  borderHi:  "#1B3A6B22",
-  text:      "#1B3A6B",   // azul oscuro brand como texto principal
-  textSub:   "#4A6A8A",
-  textMuted: "#8AAAC0",
-  accent:    "#E07000",   // naranja ligeramente más oscuro para contraste en claro
-  accentDim: "#E0700022",
-  pink:      "#D4347A",
-  pinkDim:   "#D4347A22",
-  blue:      "#1B3A6B",   // azul oscuro brand
-  blueDim:   "#1B3A6B22",
-  purple:    "#7044D4",
-  purpleDim: "#7044D422",
-  red:       "#D43030",
-  redDim:    "#D4303022",
-  amber:     "#C07800",
-  amberDim:  "#C0780022",
-  teal:      "#0E9E8A",
-  tealDim:   "#0E9E8A22",
+  bg:         "#F4F6F9",   // gris muy suave (no blanco puro)
+  bgCard:     "#FFFFFF",
+  bgElevated: "#EBF0F6",
+  border:     "#1B3A6B10",
+  borderHi:   "#1B3A6B1A",
+  text:       "#1B3A6B",   // azul oscuro brand — color principal
+  textSub:    "#4A6A8A",
+  textMuted:  "#8AAAC0",
+  accent:     "#FF8C00",   // naranja brand completo — solo CTAs importantes
+  accentDim:  "#FF8C0018",
+  pink:       "#D4347A",
+  pinkDim:    "#D4347A18",
+  blue:       "#1B3A6B",
+  blueDim:    "#1B3A6B18",
+  purple:     "#7044D4",
+  purpleDim:  "#7044D418",
+  red:        "#D43030",
+  redDim:     "#D4303018",
+  amber:      "#C07800",
+  amberDim:   "#C0780018",
+  teal:       "#0E9E8A",
+  tealDim:    "#0E9E8A18",
+  /* Tokens de card para modo claro */
+  cardBorder: "none",
+  cardShadow: "0 2px 12px rgba(27,58,107,0.07), 0 1px 3px rgba(27,58,107,0.04)",
 };
 
 // F, ThemeContext, useTheme → importados desde ./lib/theme
@@ -290,8 +293,8 @@ function BusinessCard({ biz }) {
 function SectionLabel({ label }) {
   const { C } = useTheme();
   return (
-    <div style={{ fontFamily: F.body, fontSize: 11, fontWeight: 700, color: C.textMuted,
-      textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, marginTop: 4 }}>
+    <div style={{ fontFamily: F.body, fontSize: 10, fontWeight: 700, color: C.textMuted,
+      textTransform: "uppercase", letterSpacing: 1.0, marginBottom: 10, marginTop: 4 }}>
       {label}
     </div>
   );
@@ -413,7 +416,9 @@ function LoadingRows({ count = 3 }) {
 const makeCard = (C, extra = {}) => ({
   background: C.bgCard,
   borderRadius: 20,
-  border: `1px solid ${C.border}`,
+  /* Light mode: sombra suave sin borde. Dark mode: borde sutil sin sombra. */
+  border:     C.cardBorder !== undefined ? C.cardBorder : `1px solid ${C.border}`,
+  boxShadow:  C.cardShadow,
   overflow: "hidden",
   ...extra,
 });
@@ -583,51 +588,106 @@ function FilterRow({ items, active, setActive, color }) {
 }
 
 /* ── NavBar ── */
+/* ── Nav SVG Icons — líneas limpias, sin emojis ── */
+const NavIcons = {
+  feed: (on, col) => (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none"
+      stroke={col} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 10L12 3l9 7v10a1 1 0 01-1 1H15v-6H9v6H4a1 1 0 01-1-1z"
+        fill={on ? col : "none"} />
+    </svg>
+  ),
+  walkers: (on, col) => (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill={col}>
+      <circle cx="8.8"  cy="5"    r="1.85"/>
+      <circle cx="15.2" cy="5"    r="1.85"/>
+      <circle cx="5.5"  cy="10.5" r="1.65"/>
+      <circle cx="18.5" cy="10.5" r="1.65"/>
+      <path d="M12 21c-3.5 0-6-2.8-5.4-6.8C7.1 11.5 9.5 10 12 10s4.9 1.5 5.4 4.2C18 18.2 15.5 21 12 21z"/>
+    </svg>
+  ),
+  health: (on, col) => (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none"
+      stroke={col} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l8.84 8.84 8.84-8.84a5.5 5.5 0 000-7.78z"
+        fill={on ? col : "none"} />
+    </svg>
+  ),
+  lost: (on, col) => (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none"
+      stroke={col} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"
+        fill={on ? col : "none"} />
+      <circle cx="12" cy="10" r="3"
+        fill={on ? "#fff" : "none"} stroke={on ? "none" : col} strokeWidth={1.5}/>
+    </svg>
+  ),
+  more: (_on, col) => (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill={col}>
+      <rect x="3"  y="3"  width="7.5" height="7.5" rx="2"/>
+      <rect x="13.5" y="3"  width="7.5" height="7.5" rx="2"/>
+      <rect x="3"  y="13.5" width="7.5" height="7.5" rx="2"/>
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>
+    </svg>
+  ),
+};
+
 function NavBar({ active, setActive, notifCount }) {
   const { C, isDark } = useTheme();
   const tabs = [
-    { id:"feed",    emoji:"⌂",  label:"Inicio"   },
-    { id:"walkers", emoji:"🦮", label:"Paseos"   },
-    { id:"health",  emoji:"🩺", label:"Salud"    },
-    { id:"lost",    emoji:"📍", label:"Perdidos" },
-    { id:"more",    emoji:"⋯",  label:"Más"      },
+    { id:"feed",    icon:NavIcons.feed,    label:"Inicio"   },
+    { id:"walkers", icon:NavIcons.walkers, label:"Paseos"   },
+    { id:"health",  icon:NavIcons.health,  label:"Salud"    },
+    { id:"lost",    icon:NavIcons.lost,    label:"Perdidos" },
+    { id:"more",    icon:NavIcons.more,    label:"Más"      },
   ];
   return (
     <div style={{
-      /* Flotante: bottom fijo, centrado con left+translate sin margen lateral */
       position:"fixed", bottom:16,
       left:"50%", transform:"translateX(-50%)",
-      /* Ancho: llena la pantalla menos 32px de margen (16px c/lado) */
       width:"calc(min(100vw, 420px) - 32px)",
       display:"flex",
-      background: isDark ? "rgba(19,34,64,0.82)" : "rgba(255,255,255,0.82)",
+      background: isDark ? "rgba(19,34,64,0.82)" : "rgba(255,255,255,0.88)",
       backdropFilter:"blur(24px)", WebkitBackdropFilter:"blur(24px)",
       borderRadius:24,
       border:`1px solid ${C.borderHi}`,
-      boxShadow:"0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.14)",
+      boxShadow: isDark
+        ? "0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.14)"
+        : "0 4px 24px rgba(27,58,107,0.12), 0 1px 6px rgba(27,58,107,0.06)",
       padding:"10px 8px 12px",
       zIndex:100,
     }}>
-      {tabs.map(t => (
-        <button key={t.id} onClick={() => setActive(t.id)} style={{
-          flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4,
-          background:"none", border:"none", cursor:"pointer",
-          opacity: active === t.id ? 1 : 0.65, transition:"all 0.15s",
-          transform: active === t.id ? "translateY(-1px)" : "none",
-        }}>
-          <div style={{
-            fontSize:20, background: active === t.id ? C.accent : "transparent",
-            color: active === t.id ? C.bg : C.text,
-            borderRadius:10, padding:"4px 10px", transition:"all 0.15s", position:"relative",
+      {tabs.map(t => {
+        const isOn = active === t.id;
+        const iconColor = isOn ? C.bg : C.text;
+        return (
+          <button key={t.id} onClick={() => setActive(t.id)} style={{
+            flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3,
+            background:"none", border:"none", cursor:"pointer",
+            opacity: isOn ? 1 : 0.65, transition:"all 0.15s",
+            transform: isOn ? "translateY(-1px)" : "none",
           }}>
-            {t.emoji}
-            {t.id === "feed" && notifCount > 0 && (
-              <span style={{ position:"absolute", top:-4, right:-4, background:C.red, width:14, height:14, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color:"#fff", fontWeight:700, border:`2px solid transparent` }}>{notifCount}</span>
-            )}
-          </div>
-          <span style={{ fontFamily:F.body, fontSize:10, fontWeight:500, color: active === t.id ? C.accent : C.textSub }}>{t.label}</span>
-        </button>
-      ))}
+            <div style={{
+              background: isOn ? C.accent : "transparent",
+              borderRadius:12, padding:"5px 11px",
+              transition:"all 0.15s", position:"relative",
+              display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              {t.icon(isOn, iconColor)}
+              {t.id === "feed" && notifCount > 0 && (
+                <span style={{ position:"absolute", top:-3, right:-3, background:C.red,
+                  width:14, height:14, borderRadius:"50%", display:"flex",
+                  alignItems:"center", justifyContent:"center",
+                  fontSize:8, color:"#fff", fontWeight:700 }}>{notifCount}</span>
+              )}
+            </div>
+            <span style={{ fontFamily:F.body, fontSize:10, fontWeight:600,
+              color: isOn ? C.accent : C.textSub }}>
+              {t.label}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -645,29 +705,48 @@ const QUICK_ITEMS = [
 ];
 
 function QuickNav({ currentTab, currentSub, onNavigate }) {
-  const { C } = useTheme();
+  const { C, isDark } = useTheme();
   return (
     <div style={{
-      display:"flex", gap:8, overflowX:"auto", padding:"9px 14px 11px",
+      display:"flex", gap:7, overflowX:"auto", padding:"10px 14px 12px",
       scrollbarWidth:"none", msOverflowStyle:"none",
       background: C.bg, borderBottom:`1px solid ${C.border}`,
       WebkitOverflowScrolling:"touch",
     }}>
       {QUICK_ITEMS.map(item => {
         const isActive =
-          item.mainTab === "walkers" || item.mainTab === "lost"
-            ? currentTab === item.mainTab
-            : currentSub === item.id;
+          item.id === "mymascota"
+            ? false  // nunca queda "seleccionado" — es una acción, no un estado
+            : item.mainTab === "walkers" || item.mainTab === "lost"
+              ? currentTab === item.mainTab
+              : currentSub === item.id;
+
+        /* Light mode: chip blanco con sombra / Dark mode: chip elevado */
+        const chipBg = isDark
+          ? (isActive ? C.accent + "22" : C.bgElevated)
+          : (isActive ? C.accent + "12" : "#FFFFFF");
+
+        const chipBorder = isDark
+          ? `1.5px solid ${isActive ? C.accent + "88" : C.border}`
+          : `1.5px solid ${isActive ? C.accent : "transparent"}`;
+
+        const chipShadow = isDark
+          ? "none"
+          : isActive
+            ? `0 0 0 2px ${C.accent}28`
+            : "0 1px 4px rgba(27,58,107,0.10)";
+
         return (
           <button key={item.id} onClick={() => onNavigate(item)} style={{
             flexShrink:0, display:"flex", alignItems:"center", gap:5,
-            background: isActive ? C.accent + "22" : C.bgElevated,
-            border:`1.5px solid ${isActive ? C.accent + "88" : C.border}`,
-            borderRadius:20, padding:"5px 12px 5px 10px", cursor:"pointer",
-            transition:"all 0.15s", whiteSpace:"nowrap",
+            background: chipBg,
+            border: chipBorder,
+            boxShadow: chipShadow,
+            borderRadius:20, padding:"6px 13px 6px 10px",
+            cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap",
           }}>
-            <span style={{ fontSize:14 }}>{item.emoji}</span>
-            <span style={{ fontFamily:F.body, fontSize:12, fontWeight:600,
+            <span style={{ fontSize:13 }}>{item.emoji}</span>
+            <span style={{ fontFamily:F.body, fontSize:11, fontWeight:600,
               color: isActive ? C.accent : C.text }}>
               {item.label}
             </span>
@@ -884,32 +963,47 @@ function Stories() {
     { photo:"/Gato_persa.jpeg",       emoji:"🐈", name:"Nala"   },
     { emoji:"🦜", name:"Kiwi" },
   ];
+
+  // Degradado de anillo estilo Instagram
+  const RING = "linear-gradient(135deg, #FF8C00 0%, #F055A3 40%, #4A9EFF 100%)";
+
   return (
-    <div style={{ display:"flex", gap:12, overflowX:"auto", padding:"14px 16px", scrollbarWidth:"none" }}>
-      {items.map((s, i) => (
-        <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, flexShrink:0, cursor:"pointer" }}>
-          <div style={{
-            width:58, height:58, borderRadius:18,
-            overflow:"hidden",
-            border: s.dim ? `1.5px dashed ${C.borderHi}` : `2px solid ${C.accent}`,
-            background: s.dim ? C.bgElevated : `linear-gradient(135deg, ${C.accent}33, ${C.pink}33)`,
-            display:"flex", alignItems:"center", justifyContent:"center",
-            flexShrink:0,
-          }}>
-            {s.photo ? (
-              <img
-                src={s.photo}
-                alt={s.name}
-                style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
-                onError={e => { e.currentTarget.style.display = "none" }}
-              />
-            ) : (
-              <span style={{ fontSize:26 }}>{s.emoji}</span>
-            )}
+    <div style={{ display:"flex", gap:10, overflowX:"auto", padding:"10px 16px 14px", scrollbarWidth:"none" }}>
+      {items.map((s, i) => {
+        const hasRing = !s.dim; // todas salvo el botón "+"
+        return (
+          <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:5, flexShrink:0, cursor:"pointer" }}>
+            {/* Contenedor exterior: el degradado aparece como anillo */}
+            <div style={{
+              width: 64, height: 64,
+              borderRadius: 21,
+              padding: hasRing ? 2.5 : 0,
+              background: s.dim
+                ? "transparent"
+                : RING,
+              flexShrink: 0,
+            }}>
+              {/* Interior: fondo sólido crea el gap visual entre anillo y foto */}
+              <div style={{
+                width: "100%", height: "100%",
+                borderRadius: s.dim ? 20 : 18,
+                overflow: "hidden",
+                background: s.dim ? C.bgElevated : C.bg,
+                border: s.dim ? `1.5px dashed ${C.borderHi}` : "none",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {s.photo ? (
+                  <img src={s.photo} alt={s.name}
+                    style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                ) : (
+                  <span style={{ fontSize:26 }}>{s.emoji}</span>
+                )}
+              </div>
+            </div>
+            <span style={{ fontFamily:F.body, fontSize:10, fontWeight:500, color:C.textSub }}>{s.name}</span>
           </div>
-          <span style={{ fontFamily:F.body, fontSize:10, fontWeight:500, color:C.textSub }}>{s.name}</span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
