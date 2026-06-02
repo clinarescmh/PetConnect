@@ -304,7 +304,7 @@ export async function fetchNearbyPetShops(lat, lon) {
   const bbox   = makeBbox(lat, lon, 25)
 
   try {
-    const [tiendaSettled, pelucaSettled] = await Promise.allSettled([
+    const [tiendaSettled, pelucaSettled, acuarioSettled] = await Promise.allSettled([
 
       // ── TIENDAS: bbox estricto ──────────────────────────────────────────────
       Promise.allSettled(
@@ -317,9 +317,20 @@ export async function fetchNearbyPetShops(lat, lon) {
       // ── PELUQUERÍAS: búsqueda nacional + filtro de distancia ───────────────
       // Sin viewbox ni bounded — igual que la URL que devuelve 5 resultados reales.
       // countrycodes=cl viene de los defaults de searchNominatim.
+      // Cascada de 6 términos para maximizar cobertura de naming chileno.
       Promise.allSettled(
-        ['peluqueria canina', 'estetica canina'].map(q =>
+        ['peluqueria canina', 'estetica canina', 'spa canino',
+         'grooming santiago', 'estetica animal', 'corte perro'].map(q =>
           searchNominatim({ q, limit: '20' }, ctrl.signal)
+            .catch(() => [])
+        )
+      ).then(r => r.flatMap(x => x.status === 'fulfilled' ? x.value : [])),
+
+      // ── ACUARIOS: naming chileno específico ────────────────────────────────
+      Promise.allSettled(
+        ['acuario mascotas', 'peces ornamentales', 'tienda peces',
+         'mundo acuatico', 'acuario santiago'].map(q =>
+          searchNominatim({ q, viewbox: bbox, bounded: '0', limit: '10' }, ctrl.signal)
             .catch(() => [])
         )
       ).then(r => r.flatMap(x => x.status === 'fulfilled' ? x.value : [])),
@@ -327,10 +338,11 @@ export async function fetchNearbyPetShops(lat, lon) {
     ])
 
     const allItems = [
-      ...(tiendaSettled.status === 'fulfilled' ? tiendaSettled.value : []),
-      ...(pelucaSettled.status === 'fulfilled' ? pelucaSettled.value : []),
+      ...(tiendaSettled.status  === 'fulfilled' ? tiendaSettled.value  : []),
+      ...(pelucaSettled.status  === 'fulfilled' ? pelucaSettled.value  : []),
+      ...(acuarioSettled.status === 'fulfilled' ? acuarioSettled.value : []),
     ]
-    console.log('[nominatim] stores raw:', allItems.length, '(tiendas + peluquerías)')
+    console.log('[nominatim] stores raw:', allItems.length, '(tiendas + peluquerías + acuarios)')
 
     // Dedup por place_id
     const seen = new Set()

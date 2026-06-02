@@ -1872,6 +1872,9 @@ function StoresTab() {
   const filteredBiz = bizStores.filter(b =>
     !search || (b?.nombre ?? "").toLowerCase().includes(search.toLowerCase())
   );
+  // Detectar si hay acuarios en los resultados para mostrar/ocultar el filtro
+  const hasAcuarios = osmStores.some(s => (s?.type ?? "").includes("cua"))
+
   const filteredOSM = osmStores.filter(s => {
     const matchSearch = !search || (s?.name ?? "").toLowerCase().includes(search.toLowerCase());
     const type = s?.type ?? "";
@@ -1879,7 +1882,7 @@ function StoresTab() {
       cat === "Todos"    ? true :
       cat === "Tienda"   ? type.includes("mascota") || type.includes("Animal") || type.includes("Alimento") :
       cat === "Peluquería" ? type.includes("Peluquer") :
-      cat === "Acuarios" ? type.includes("cua") :
+      cat === "Acuarios"   ? type.includes("cua") :
       true;
     return matchSearch && matchCat;
   });
@@ -1910,7 +1913,15 @@ function StoresTab() {
       </div>
 
       <div style={{ marginBottom:16 }}>
-        <FilterRow items={STORE_FILTERS} active={cat} setActive={setCat} color={C.teal} />
+        {/* Ocultar "Acuarios" si no hay resultados de ese tipo */}
+        <FilterRow
+          items={hasAcuarios || osmLoading
+            ? STORE_FILTERS
+            : STORE_FILTERS.filter(f => f !== "Acuarios")}
+          active={hasAcuarios ? cat : cat === "Acuarios" ? "Todos" : cat}
+          setActive={setCat}
+          color={C.teal}
+        />
       </div>
 
       {/* Estado: cargando (lista vacía) */}
