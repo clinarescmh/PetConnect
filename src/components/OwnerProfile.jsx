@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTheme, F } from '../lib/theme'
+import { useTheme, F, makeCard } from '../lib/theme'
 import { loadOwner, saveOwner, loadPets, loadFollowing } from '../lib/pets'
 
 export default function OwnerProfile({ onClose, onOpenPet, onAddPet }) {
@@ -88,8 +88,7 @@ export default function OwnerProfile({ onClose, onOpenPet, onAddPet }) {
 
         {/* Edit form */}
         {editing && (
-          <div style={{ background:C.bgCard, borderRadius:18, padding:'16px',
-            marginBottom:20, border:`1px solid ${C.border}` }}>
+          <div style={{ ...makeCard(C), padding:'16px', marginBottom:20 }}>
             <div style={{ fontFamily:F.body, fontSize:11, fontWeight:700, color:C.textMuted,
               textTransform:'uppercase', letterSpacing:0.8, marginBottom:12 }}>Editar perfil</div>
 

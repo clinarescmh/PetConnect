@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTheme, F } from '../lib/theme'
+import { useTheme, F, makeCard } from '../lib/theme'
 
 const CAT_COLORS = { salud:'#FF5252', legal:'#4A9EFF', cuidados:'#2DD4BF', comportamiento:'#9B6EF5' }
 const CATS = ['salud','legal','cuidados','comportamiento']
@@ -100,8 +100,7 @@ export default function CommunityScreen({ onClose }) {
             </button>
 
             {showNewConsulta && (
-              <div style={{ background:C.bgCard, borderRadius:18, padding:'16px', marginBottom:16,
-                border:`1px solid ${C.border}` }}>
+              <div style={{ ...makeCard(C), padding:'16px', marginBottom:16 }}>
                 <input value={cForm.titulo} onChange={e => setCForm(f=>({...f,titulo:e.target.value}))}
                   placeholder="Título de tu consulta *" style={{ ...inp, marginBottom:10 }} />
                 <textarea value={cForm.desc} onChange={e => setCForm(f=>({...f,desc:e.target.value}))}
@@ -195,8 +194,7 @@ export default function CommunityScreen({ onClose }) {
                 </div>
               </div>
             ) : (
-              <div style={{ background:C.bgCard, borderRadius:18, padding:'16px', marginBottom:16,
-                border:`1px solid ${C.border}` }}>
+              <div style={{ ...makeCard(C), padding:'16px', marginBottom:16 }}>
                 {[['desc','Descripción de lo que ocurre *','textarea'],
                   ['ubicacion','Dirección o zona','text'],
                   ['foto','URL de foto (opcional)','url'],

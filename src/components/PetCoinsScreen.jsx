@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTheme, F } from '../lib/theme'
+import { useTheme, F, makeCard } from '../lib/theme'
 import { usePetCoins, LEVELS, COINS_ACTIONS } from '../lib/petcoins.jsx'
 
 const MOCK_RANKING = [
@@ -74,8 +74,7 @@ export default function PetCoinsScreen({ onClose }) {
         {tab === 'rewards' && (
           <>
             {/* Barra general */}
-            <div style={{ background:C.bgCard, borderRadius:18, padding:'18px',
-              marginBottom:18, border:`1px solid ${C.border}` }}>
+            <div style={{ ...makeCard(C), padding:'18px', marginBottom:18 }}>
               <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
                 <span style={{ fontFamily:F.body, fontSize:12, fontWeight:600, color:C.textSub }}>
                   Progreso total
@@ -104,9 +103,8 @@ export default function PetCoinsScreen({ onClose }) {
                   ))
               return (
                 <div key={i} style={{
-                  background:C.bgCard, borderRadius:18, padding:'16px', marginBottom:12,
-                  border:`1.5px solid ${unlocked ? C.amber + '55' : C.border}`,
-                  position:'relative', overflow:'hidden',
+                  ...makeCard(C, { border:`1.5px solid ${unlocked ? C.amber + '55' : C.border}` }),
+                  padding:'16px', marginBottom:12, position:'relative',
                 }}>
                   {/* Barra superior si desbloqueado */}
                   {unlocked && (
@@ -170,8 +168,7 @@ export default function PetCoinsScreen({ onClose }) {
             })}
 
             {/* Cómo ganar */}
-            <div style={{ background:C.bgCard, borderRadius:18, padding:'16px',
-              marginTop:8, border:`1px solid ${C.border}` }}>
+            <div style={{ ...makeCard(C), padding:'16px', marginTop:8 }}>
               <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14,
                 color:C.text, marginBottom:14 }}>Cómo ganar 🪙</div>
               {ACTIONS.map((a, i) => (

@@ -4,7 +4,7 @@
  * Guarda en localStorage: petconnect_owner y petconnect_my_pet
  */
 import { useState } from 'react'
-import { useTheme, F } from '../lib/theme'
+import { useTheme, F, makeCard } from '../lib/theme'
 import { PET_LS_KEY, OWNER_LS_KEY, SPECIES } from './MyPetForm'
 
 export default function SetupScreen({ onComplete }) {
@@ -86,8 +86,7 @@ export default function SetupScreen({ onComplete }) {
       <div style={{ padding:'0 18px 48px' }}>
 
         {/* ── TU PERFIL ── */}
-        <div style={{ background:C.bgCard, borderRadius:18, padding:'18px', marginBottom:16,
-          border:`1px solid ${C.border}` }}>
+        <div style={{ ...makeCard(C), padding:'18px', marginBottom:16 }}>
           {sectionTitle('👤 Tu perfil')}
 
           {fieldLabel('Tu nombre', true)}
@@ -108,8 +107,7 @@ export default function SetupScreen({ onComplete }) {
         </div>
 
         {/* ── TU MASCOTA ── */}
-        <div style={{ background:C.bgCard, borderRadius:18, padding:'18px', marginBottom:16,
-          border:`1px solid ${C.border}` }}>
+        <div style={{ ...makeCard(C), padding:'18px', marginBottom:16 }}>
           {sectionTitle('🐾 Tu mascota')}
 
           {fieldLabel('Nombre de tu mascota', true)}

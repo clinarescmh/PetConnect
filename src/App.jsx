@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./lib/supabase";
 import { getLocation, fetchNearbyVets, fetchNearbyPetShops, fetchNearbyLodging } from "./lib/overpass";
-import { F, ThemeContext, useTheme } from "./lib/theme";
+import { F, ThemeContext, useTheme, makeCard } from "./lib/theme";
 import BusinessForm    from "./components/BusinessForm";
 import WalkerForm      from "./components/WalkerForm";
 import PetProfile      from "./components/PetProfile";
@@ -41,6 +41,8 @@ const darkColors = {
   amberDim:  "#FFB54722",
   teal:      "#2DD4BF",   // teal brand
   tealDim:   "#2DD4BF22",
+  /* Sombra de card en dark: profundidad sutil sobre el navy */
+  cardShadow: "0 2px 8px rgba(0,0,0,0.22), 0 8px 24px rgba(0,0,0,0.16)",
 };
 
 const lightColors = {
@@ -66,9 +68,9 @@ const lightColors = {
   amberDim:   "#C0780018",
   teal:       "#0E9E8A",
   tealDim:    "#0E9E8A18",
-  /* Tokens de card para modo claro */
-  cardBorder: "none",
-  cardShadow: "0 2px 12px rgba(27,58,107,0.07), 0 1px 3px rgba(27,58,107,0.04)",
+  /* Tokens de card para modo claro — sombra premium en capas (estilo Airbnb) */
+  cardBorder: "1px solid rgba(27,58,107,0.06)",
+  cardShadow: "0 1px 2px rgba(27,58,107,0.04), 0 4px 16px rgba(27,58,107,0.06), 0 16px 32px rgba(27,58,107,0.04)",
 };
 
 // F, ThemeContext, useTheme → importados desde ./lib/theme
@@ -421,17 +423,6 @@ function LoadingRows({ count = 3 }) {
   );
 }
 
-/* ── Helpers ── */
-const makeCard = (C, extra = {}) => ({
-  background: C.bgCard,
-  borderRadius: 20,
-  /* Light mode: sombra suave sin borde. Dark mode: borde sutil sin sombra. */
-  border:     C.cardBorder !== undefined ? C.cardBorder : `1px solid ${C.border}`,
-  boxShadow:  C.cardShadow,
-  overflow: "hidden",
-  ...extra,
-});
-
 /* ── Mock data (fallback si Supabase no responde) ── */
 const mockPets = [
   { id:1, name:"Tobías", username:"tobias_golden",  breed:"Golden Retriever", owner:"María L.", avatar:"🐕", owner_avatar:"👩", likes:142, comments:28, caption:"Primer día en el parque esta semana 🌿",          time_ago:"2h", tag:"#lavidacanina", photo:"/Golden_retriever.jpeg" },
@@ -519,16 +510,17 @@ function Tag({ label, color }) {
 
 function Btn({ label, onClick, variant = "primary", color, small }) {
   const { C } = useTheme();
-  const bg = variant === "primary" ? (color || C.accent) : "transparent";
-  const cl = variant === "primary" ? (color ? "#fff" : C.bg) : (color || C.textSub);
-  const border = variant === "ghost" ? `1px solid ${C.borderHi}` : "none";
+  const primary = variant === "primary";
+  const bg = primary ? (color || C.accent) : "transparent";
+  const cl = primary ? (color ? "#fff" : C.bg) : (color || C.textSub);
+  const border = variant === "ghost" ? `1.5px solid ${C.borderHi}` : "none";
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} className="pc-btn" style={{
       background: bg, color: cl, border, borderRadius: 12,
-      padding: small ? "7px 14px" : "11px 18px",
-      fontFamily: F.body, fontSize: small ? 12 : 13, fontWeight: 600,
-      cursor: "pointer", transition: "opacity 0.15s", letterSpacing: 0.2,
-      whiteSpace: "nowrap",
+      padding: small ? "8px 15px" : "12px 20px",
+      fontFamily: F.body, fontSize: small ? 12 : 13.5, fontWeight: 700,
+      cursor: "pointer", letterSpacing: 0.2, whiteSpace: "nowrap",
+      boxShadow: primary ? `0 4px 14px ${(color || C.accent)}33` : "none",
     }}>{label}</button>
   );
 }
@@ -670,10 +662,10 @@ function NavBar({ active, setActive, notifCount }) {
         const isOn = active === t.id;
         const iconColor = isOn ? C.bg : C.text;
         return (
-          <button key={t.id} onClick={() => setActive(t.id)} style={{
+          <button key={t.id} onClick={() => setActive(t.id)} className="pc-tap" style={{
             flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3,
             background:"none", border:"none", cursor:"pointer",
-            opacity: isOn ? 1 : 0.65, transition:"all 0.15s",
+            opacity: isOn ? 1 : 0.65,
             transform: isOn ? "translateY(-1px)" : "none",
           }}>
             <div style={{
@@ -746,13 +738,13 @@ function QuickNav({ currentTab, currentSub, onNavigate }) {
             : "0 1px 4px rgba(27,58,107,0.10)";
 
         return (
-          <button key={item.id} onClick={() => onNavigate(item)} style={{
+          <button key={item.id} onClick={() => onNavigate(item)} className="pc-tap" style={{
             flexShrink:0, display:"flex", alignItems:"center", gap:5,
             background: chipBg,
             border: chipBorder,
             boxShadow: chipShadow,
-            borderRadius:20, padding:"6px 13px 6px 10px",
-            cursor:"pointer", transition:"all 0.15s", whiteSpace:"nowrap",
+            borderRadius:20, padding:"7px 14px 7px 11px",
+            cursor:"pointer", whiteSpace:"nowrap",
           }}>
             <span style={{ fontSize:13 }}>{item.emoji}</span>
             <span style={{ fontFamily:F.body, fontSize:11, fontWeight:600,
@@ -778,37 +770,39 @@ function Header({ tab, onBack, onNotif, unread, onCoinsClick, onSearch }) {
     health:"Mis Mascotas 🐾", community:"Comunidad 💬", games:"Juegos 🎮",
     petcoins:"PetCoins",
   };
+  const iconBtn = {
+    background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:12,
+    width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center",
+    cursor:"pointer", fontSize:16, color:C.text,
+  };
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px 12px", background:C.bg, borderBottom:`1px solid ${C.border}`, backdropFilter:"blur(12px)" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"15px 18px 13px", background: isDark ? `${C.bg}E6` : `${C.bg}E6`, borderBottom:`1px solid ${C.border}`, backdropFilter:"blur(16px)", WebkitBackdropFilter:"blur(16px)" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:11 }}>
         {onBack
-          ? <button onClick={onBack} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:16, color:C.text }}>←</button>
-          : <img src="/icon.jpeg" alt="PetConnect" style={{ width:34, height:34, borderRadius:10, objectFit:"cover", flexShrink:0 }} />
+          ? <button onClick={onBack} className="pc-tap" style={iconBtn}>←</button>
+          : <img src="/icon.jpeg" alt="PetConnect" style={{ width:36, height:36, borderRadius:12, objectFit:"cover", flexShrink:0, boxShadow:"0 2px 8px rgba(0,0,0,0.12)" }} />
         }
-        <span style={{ fontFamily:F.display, fontWeight:800, fontSize:18, color:C.text, letterSpacing:-0.5 }}>{titles[tab] || "PetConnect"}</span>
+        <span style={{ fontFamily:F.display, fontWeight:800, fontSize:21, color:C.text, letterSpacing:-0.6 }}>{titles[tab] || "PetConnect"}</span>
       </div>
-      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+      <div style={{ display:"flex", gap:7, alignItems:"center" }}>
         {/* Botón búsqueda */}
-        <button onClick={onSearch} style={{ background:C.bgElevated, border:`1px solid ${C.border}`,
-          borderRadius:10, width:34, height:34, display:"flex", alignItems:"center",
-          justifyContent:"center", cursor:"pointer", fontSize:16 }}>🔍</button>
+        <button onClick={onSearch} className="pc-tap" style={iconBtn}>🔍</button>
         {/* Widget PetCoins */}
-        <button onClick={onCoinsClick} style={{
+        <button onClick={onCoinsClick} className="pc-tap" style={{
           display:"flex", alignItems:"center", gap:4,
           background: C.amber + "1A", border:`1px solid ${C.amber}33`,
-          borderRadius:20, padding:"5px 10px", cursor:"pointer",
-          transition:"all 0.15s",
+          borderRadius:20, padding:"6px 11px", cursor:"pointer",
         }}>
           <span style={{ fontSize:15 }}>🪙</span>
           <span style={{ fontFamily:F.display, fontWeight:700, fontSize:13, color:C.amber }}>
             {coins.toLocaleString()}
           </span>
         </button>
-        <button onClick={onNotif} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", position:"relative" }}>
+        <button onClick={onNotif} className="pc-tap" style={{ ...iconBtn, position:"relative" }}>
           <span style={{ fontSize:15 }}>🔔</span>
           {unread > 0 && <span style={{ position:"absolute", top:-3, right:-3, background:C.red, width:14, height:14, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color:"#fff", fontWeight:700 }}>{unread}</span>}
         </button>
-        <button onClick={toggleTheme} title={isDark ? "Modo claro" : "Modo oscuro"} style={{ background:C.bgElevated, border:`1px solid ${C.border}`, borderRadius:10, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
+        <button onClick={toggleTheme} title={isDark ? "Modo claro" : "Modo oscuro"} className="pc-tap" style={iconBtn}>
           <span style={{ fontSize:15 }}>{isDark ? "☀️" : "🌙"}</span>
         </button>
       </div>
@@ -1963,7 +1957,7 @@ function MoreTab({ onNavigate, onRegisterBusiness, onOpenOwnerProfile }) {
       <div style={{ fontFamily:F.body, fontSize:11, color:C.textMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.8, marginBottom:12 }}>Servicios</div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
         {items.map(item => (
-          <div key={item.id} onClick={() => onNavigate(item.id)} style={{ ...makeCard(C), padding:"18px", cursor:"pointer", transition:"border-color 0.15s" }}>
+          <div key={item.id} onClick={() => onNavigate(item.id)} className="pc-card-h" style={{ ...makeCard(C, { borderTop:`3px solid ${item.color}` }), padding:"18px", cursor:"pointer" }}>
             <div style={{ width:44, height:44, borderRadius:14, background:item.color + "18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, marginBottom:10 }}>{item.icon}</div>
             <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14, color:C.text }}>{item.label}</div>
             <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub, marginTop:4, lineHeight:1.4 }}>{item.desc}</div>
@@ -2555,8 +2549,45 @@ export default function PetConnect({ isDark, toggleTheme }) {
       <div style={{ maxWidth:420, margin:"0 auto", background:C.bg, minHeight:"100vh", display:"flex", flexDirection:"column" }}>
         <style>{`
           * { box-sizing: border-box; }
-          body { margin: 0; background: ${C.bg}; }
+          html, body { margin: 0; background: ${C.bg};
+            -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility; }
           input::placeholder { color: ${C.textMuted}; }
+
+          /* Botones consistentes con hover/press en toda la app */
+          .pc-btn { transition: transform .16s ease, box-shadow .16s ease, filter .16s ease, opacity .16s ease; }
+          .pc-btn:hover  { transform: translateY(-1px); filter: brightness(1.05); }
+          .pc-btn:active { transform: translateY(0) scale(.97); filter: brightness(.98); }
+
+          /* Elementos tocables (íconos, chips) */
+          .pc-tap { transition: transform .16s ease, background .16s ease, box-shadow .16s ease, border-color .16s ease; }
+          .pc-tap:hover  { transform: translateY(-1px); }
+          .pc-tap:active { transform: scale(.94); }
+
+          /* Cards interactivas que se elevan al pasar el cursor */
+          .pc-card-h { transition: transform .18s ease, box-shadow .18s ease; }
+          .pc-card-h:hover { transform: translateY(-3px); }
+
+          /* Scrollbar fino y discreto */
+          *::-webkit-scrollbar { width: 7px; height: 7px; }
+          *::-webkit-scrollbar-thumb { background: ${C.borderHi}; border-radius: 8px; }
+          *::-webkit-scrollbar-track { background: transparent; }
+
+          /* Foco accesible y elegante */
+          button:focus-visible, input:focus-visible, a:focus-visible {
+            outline: 2px solid ${C.accent}; outline-offset: 2px; border-radius: 8px; }
+
+          /* Transición suave al cambiar de pantalla */
+          @keyframes pc-page {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          .pc-page { animation: pc-page .34s cubic-bezier(.22,.61,.36,1); }
+
+          @media (prefers-reduced-motion: reduce) {
+            .pc-btn, .pc-tap, .pc-card-h, .pc-page { transition: none !important; animation: none !important; }
+          }
+
           @keyframes heart-pop {
             0%   { transform: scale(1);    }
             35%  { transform: scale(1.65); }
@@ -2602,7 +2633,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
         </div>
         <div style={{ flex:1, overflowY:"auto", paddingBottom:100 }}>
           <TabErrorBoundary key={currentTab}>
-            {content[currentTab]}
+            <div className="pc-page">{content[currentTab]}</div>
           </TabErrorBoundary>
         </div>
         {!showNotif && !subTab && (
