@@ -9,6 +9,7 @@ import PetCoinsScreen     from "./components/PetCoinsScreen";
 import MyPetFormComponent from "./components/MyPetForm";
 import OwnerProfile        from "./components/OwnerProfile";
 import CommunityScreen     from "./components/CommunityScreen";
+import PostComposer        from "./components/PostComposer";
 import GamesScreen         from "./components/GamesScreen";
 import SearchScreen        from "./components/SearchScreen";
 import { loadPets, savePets, genId, loadFollowing, toggleFollow } from "./lib/pets";
@@ -650,7 +651,7 @@ function NavBar({ active, setActive, notifCount }) {
   const tabs = [
     { id:"feed",    icon:NavIcons.feed,    label:"Inicio"   },
     { id:"walkers", icon:NavIcons.walkers, label:"Paseos"   },
-    { id:"health",  icon:NavIcons.health,  label:"Salud"    },
+    { id:"health",  icon:NavIcons.health,  label:"Mascotas" },
     { id:"lost",    icon:NavIcons.lost,    label:"Perdidos" },
     { id:"more",    icon:NavIcons.more,    label:"Más"      },
   ];
@@ -779,7 +780,7 @@ function Header({ tab, onBack, onNotif, unread, onCoinsClick, onSearch }) {
     lost:"Mascotas Perdidas", more:"Servicios", vets:"Veterinarios",
     stores:"Tiendas", breeding:"Comunidad", store:"PetStore",
     adoption:"Adóptame ❤️", lodging:"Hotel Pet 🏨", notifications:"Notificaciones",
-    community:"Comunidad 💬", games:"Juegos 🎮",
+    health:"Mis Mascotas 🐾", community:"Comunidad 💬", games:"Juegos 🎮",
     petcoins:"PetCoins",
   };
   return (
@@ -1157,17 +1158,32 @@ function PostCard({ post, onPetClick }) {
   );
 }
 
+const USER_POSTS_KEY = 'petconnect_user_posts'
+
 function FeedTab() {
   const { C, openPetProfile } = useTheme();
   const { addCoins } = usePetCoins();
-  const posts = mockPets;
-  const [feedFilter, setFeedFilter] = useState("Todos");
+  const [feedFilter,    setFeedFilter]    = useState("Todos");
+  const [showComposer,  setShowComposer]  = useState(false);
+  const [localPosts,    setLocalPosts]    = useState(() => {
+    try { return JSON.parse(localStorage.getItem(USER_POSTS_KEY) || '[]') }
+    catch { return [] }
+  });
+
+  const allPosts = [...localPosts, ...mockPets];
+
+  const handlePublish = (newPost) => {
+    const updated = [newPost, ...localPosts];
+    setLocalPosts(updated);
+    try { localStorage.setItem(USER_POSTS_KEY, JSON.stringify(updated)) } catch {}
+    addCoins("POST_PHOTO");
+  };
 
   const filteredPosts = feedFilter === "Fotos"
-    ? posts.filter(p => !p.video && (p.photo || p.foto))
+    ? allPosts.filter(p => !p.video && (p.photo || p.foto))
     : feedFilter === "Videos"
-      ? posts.filter(p => !!p.video)
-      : posts;
+      ? allPosts.filter(p => !!p.video)
+      : allPosts;
 
   return (
     <div>
@@ -1207,14 +1223,29 @@ function FeedTab() {
       {/* ── Reto de la Semana ── */}
       <WeeklyChallenge />
 
-      {/* Compositor de post */}
+      {/* Compositor de post — funcional */}
+      {showComposer && (
+        <PostComposer
+          onClose={() => setShowComposer(false)}
+          onPublish={handlePublish}
+        />
+      )}
       <div style={{ padding:"0 16px 12px" }}>
-        <div style={{ background:C.bgElevated, borderRadius:16, padding:"12px 14px", display:"flex", alignItems:"center", gap:10, border:`1px solid ${C.border}` }}>
+        <div onClick={() => setShowComposer(true)} style={{
+          background:C.bgElevated, borderRadius:16, padding:"12px 14px",
+          display:"flex", alignItems:"center", gap:10,
+          border:`1px solid ${C.border}`, cursor:"pointer",
+          transition:"border-color 0.15s",
+        }}>
           <Avatar emoji="🐕" size={36} color={C.bgCard} />
-          <div style={{ flex:1, fontFamily:F.body, fontSize:13, color:C.textMuted }}>¿Qué está haciendo tu mascota?</div>
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={() => addCoins("POST_PHOTO")} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20 }}>📷</button>
-            <button style={{ background:"none", border:"none", cursor:"pointer", fontSize:20 }}>🎥</button>
+          <div style={{ flex:1, fontFamily:F.body, fontSize:13, color:C.textMuted }}>
+            ¿Qué está haciendo tu mascota?
+          </div>
+          <div style={{ display:"flex", gap:8 }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowComposer(true)}
+              style={{ background:"none", border:"none", cursor:"pointer", fontSize:20 }}>📷</button>
+            <button onClick={() => setShowComposer(true)}
+              style={{ background:"none", border:"none", cursor:"pointer", fontSize:20 }}>🎥</button>
           </div>
         </div>
       </div>
@@ -1320,7 +1351,8 @@ function WalkersTab({ onRegisterWalker }) {
 /* ── Health Tab ── */
 function HealthTab() {
   const { C } = useTheme();
-  const [section,      setSection]      = useState("pasaporte");
+  // Tab principal: perfil | pasaporte | vacunas | diario
+  const [section,      setSection]      = useState("perfil");
   const [pets,         setPetsState]    = useState(() => loadPets());
   const [activePetIdx, setActivePetIdx] = useState(0);
   const [showEditPet,  setShowEditPet]  = useState(false);
@@ -1414,10 +1446,68 @@ function HealthTab() {
         <Btn label="Agendar" small color={C.red} />
       </div>
       <div style={{ display:"flex", gap:6, marginBottom:16, background:C.bgElevated, borderRadius:14, padding:4 }}>
-        {[["pasaporte","📋 Pasaporte"],["vacunas","💉 Vacunas"],["diario","📓 Diario"]].map(([id, label]) => (
-          <button key={id} onClick={() => setSection(id)} style={{ flex:1, border:"none", borderRadius:10, padding:"9px 4px", fontFamily:F.body, fontSize:11, fontWeight:600, cursor:"pointer", background: section===id ? C.blue : "transparent", color: section===id ? "#fff" : C.textSub, transition:"all 0.15s" }}>{label}</button>
+        {[["perfil","🐾 Perfil"],["pasaporte","📋 Pasaporte"],["vacunas","💉 Vacunas"],["diario","📓 Diario"]].map(([id, label]) => (
+          <button key={id} onClick={() => setSection(id)} style={{ flex:1, border:"none", borderRadius:10, padding:"8px 2px", fontFamily:F.body, fontSize:10, fontWeight:600, cursor:"pointer", background: section===id ? C.blue : "transparent", color: section===id ? "#fff" : C.textSub, transition:"all 0.15s" }}>{label}</button>
         ))}
       </div>
+      {/* ── TAB: PERFIL ── */}
+      {section === "perfil" && (
+        myPet ? (
+          <div>
+            {/* Foto grande */}
+            {myPet.foto && (
+              <div style={{ height:200, borderRadius:18, overflow:"hidden", marginBottom:16 }}>
+                <img src={myPet.foto} alt={myPet.nombre}
+                  style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center 20%" }} />
+              </div>
+            )}
+            {/* Datos del perfil */}
+            <div style={{ ...makeCard(C), padding:"16px", marginBottom:12 }}>
+              {[
+                { icon:"🐾", label:"Especie",   value: myPet.especie         },
+                { icon:"🏷️", label:"Raza",      value: myPet.raza            },
+                { icon:"🎂", label:"Edad",       value: [age, myPet.fechaNacimiento && `(${myPet.fechaNacimiento})`].filter(Boolean).join(" ") },
+                { icon:"⚧️", label:"Sexo",       value: myPet.sexo            },
+                { icon:"💻", label:"Chip",       value: myPet.chip            },
+                { icon:"💬", label:"Descripción",value: myPet.descripcion     },
+                { icon:"@",  label:"Username",   value: myPet.username && `@${myPet.username}` },
+              ].filter(row => row.value).map((row, i, arr) => (
+                <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start",
+                  padding:"10px 0", borderBottom: i < arr.length-1 ? `1px solid ${C.border}` : "none" }}>
+                  <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{row.icon}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:F.body, fontSize:11, color:C.textMuted, marginBottom:2 }}>{row.label}</div>
+                    <div style={{ fontFamily:F.body, fontSize:14, fontWeight:600, color:C.text,
+                      wordBreak:"break-word" }}>{row.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowEditPet(true)} style={{
+              width:"100%", background:C.bgElevated, border:`1px solid ${C.border}`,
+              borderRadius:14, padding:"12px", fontFamily:F.body, fontSize:14, fontWeight:600,
+              color:C.text, cursor:"pointer", display:"flex", alignItems:"center",
+              justifyContent:"center", gap:8 }}>
+              ✏️ Editar datos de {myPet.nombre}
+            </button>
+          </div>
+        ) : (
+          <div style={{ textAlign:"center", padding:"32px 0" }}>
+            <div style={{ fontSize:52 }}>🐾</div>
+            <div style={{ fontFamily:F.display, fontWeight:700, fontSize:16,
+              color:C.textSub, marginTop:12 }}>Aún no tienes una mascota registrada</div>
+            <div style={{ fontFamily:F.body, fontSize:13, color:C.textMuted, marginTop:6 }}>
+              Agrega tu primera mascota para ver su perfil aquí
+            </div>
+            <button onClick={() => setShowAddPet(true)} style={{ marginTop:16,
+              background:C.accent, color:C.bg, border:"none", borderRadius:14,
+              padding:"12px 24px", fontFamily:F.display, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+              + Agregar mascota
+            </button>
+          </div>
+        )
+      )}
+
       {section === "pasaporte" && mockHealthRecords.map(r => (
         <div key={r.id} style={{ ...makeCard(C), padding:"14px", marginBottom:10, display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ width:44, height:44, borderRadius:12, background:sColors[r.status] + "18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>{r.icon}</div>
