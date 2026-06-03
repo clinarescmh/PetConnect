@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./lib/supabase";
-import { getLocation, fetchNearbyVets, fetchNearbyPetShops } from "./lib/overpass";
+import { getLocation, fetchNearbyVets, fetchNearbyPetShops, fetchNearbyLodging } from "./lib/overpass";
 import { F, ThemeContext, useTheme } from "./lib/theme";
 import BusinessForm    from "./components/BusinessForm";
 import WalkerForm      from "./components/WalkerForm";
@@ -499,11 +499,6 @@ const CHALLENGE_POSTS = [
   { id:"c3", name:"Bella",  photo:"/Beagle.jpeg",         challengeLikes:76,  caption:"¿Esto es dormir? 🐶" },
 ];
 
-const mockLodging = [
-  { id:1, name:"Casa PetFriendly de Ana", host:"Ana Martínez",   avatar:"👩‍🦳", rating:4.9, reviews:63,  price:20000, zone:"Providencia", capacity:"Hasta 2 perros medianos", amenities:["Jardín","Cámara 24h","Fotos diarias"],         available:true,  badge:"Superhost" },
-  { id:2, name:"PetHotel Luna Verde",     host:"Establecimiento", avatar:"🏡",  rating:4.7, reviews:128, price:15000, zone:"Las Condes",  capacity:"Todas las razas",         amenities:["Piscina canina","Paseos 2x día","Peluquería"], available:true,  badge:null        },
-  { id:3, name:"Guardería Familiar Soto", host:"Rodrigo Soto",   avatar:"👨‍🦲", rating:4.8, reviews:41,  price:12000, zone:"Maipú",       capacity:"Perros pequeños y gatos", amenities:["Sin jaulas","Fotos diarias"],                 available:false, badge:null        },
-];
 const mockNotifications = [
   { id:1, icon:"💉", title:"Desparasitación de Tobías vence en 3 días", sub:"Agenda una cita antes del 01 Jun", time:"Hace 10 min", dot:"#FF5252", unread:true  },
   { id:2, icon:"❤️", title:"A 23 personas les gustó la foto de Max",    sub:"Ver comentarios →",                time:"Hace 1h",    dot:"#F055A3", unread:true  },
@@ -1709,62 +1704,183 @@ function AdoptionTab() {
 /* ── Lodging Tab ── */
 function LodgingTab() {
   const { C } = useTheme();
-  const { data: lodgings, loading } = useData("lodging", mockLodging);
-  const [type, setType] = useState("Todo");
+  const [search, setSearch] = useState("");
+
+  // Datos reales: OSM (animal_boarding) + negocios registrados en Supabase
+  const [osmLodging, setOsmLodging] = useState([]);
+  const [bizLodging, setBizLodging] = useState([]);
+  const [locationSource, setLocSrc] = useState(null);
+  const [osmLoading, setOsmLoading] = useState(false);
+
+  // Supabase businesses categoria="alojamiento" — silent fail
+  useEffect(() => {
+    supabase.from("businesses").select("*")
+      .eq("active", true).eq("categoria", "alojamiento")
+      .then(({ data: rows, error }) => {
+        if (!error && Array.isArray(rows) && rows.length > 0) {
+          const ord = { premium: 0, basic: 1, free: 2 };
+          setBizLodging([...rows].sort((a, b) => (ord[a.plan] ?? 3) - (ord[b.plan] ?? 3)));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // OSM — en background
+  useEffect(() => {
+    let cancelled = false;
+    const FALLBACK = { lat: -33.4569, lon: -70.6483, source: "default" };
+    const safety = setTimeout(() => { if (!cancelled) setOsmLoading(false); }, 20_000);
+
+    setOsmLoading(true);
+    (async () => {
+      try {
+        const loc = await getLocation().catch(() => FALLBACK);
+        if (cancelled) return;
+        setLocSrc(loc.source ?? "default");
+
+        const results = await fetchNearbyLodging(loc.lat, loc.lon).catch(() => []);
+        if (cancelled) return;
+        if (Array.isArray(results) && results.length > 0) setOsmLodging(results);
+      } catch {
+        // silencio
+      } finally {
+        clearTimeout(safety);
+        if (!cancelled) setOsmLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; clearTimeout(safety); };
+  }, []);
+
+  const filteredBiz = bizLodging.filter(b =>
+    !search || (b?.nombre ?? "").toLowerCase().includes(search.toLowerCase()));
+  const filteredOSM = osmLodging.filter(l =>
+    !search || (l?.name ?? "").toLowerCase().includes(search.toLowerCase()));
+
   return (
     <div style={{ padding:"16px" }}>
+      {/* Encabezado */}
       <div style={{ background:`linear-gradient(135deg, ${C.blue}22, ${C.blue}08)`, border:`1px solid ${C.blue}33`, borderRadius:18, padding:"18px", marginBottom:16 }}>
         <div style={{ display:"flex", alignItems:"center", gap:14 }}>
           <div style={{ fontSize:42 }}>🏡</div>
           <div>
-            <div style={{ fontFamily:F.display, fontWeight:800, fontSize:17, color:C.text }}>Alojamiento</div>
-            <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub, marginTop:3 }}>Tu mascota, en un hogar de confianza</div>
+            <div style={{ fontFamily:F.display, fontWeight:800, fontSize:17, color:C.text }}>Hotel Pet</div>
+            <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub, marginTop:3 }}>Hoteles y guarderías para tu mascota</div>
           </div>
-        </div>
-        <div style={{ display:"flex", gap:10, marginTop:14 }}>
-          {[["📅","15–20 Jun"],["🐕","Tobías"],["📍","Tu zona"]].map(([icon, val], i) => (
-            <div key={i} style={{ flex:1, background:C.bgCard + "88", borderRadius:12, padding:"10px 12px", border:`1px solid ${C.border}`, cursor:"pointer" }}>
-              <div style={{ fontFamily:F.body, fontSize:10, color:C.textMuted, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>{icon}</div>
-              <div style={{ fontFamily:F.body, fontSize:12, color:C.text, fontWeight:600, marginTop:3 }}>{val}</div>
-            </div>
-          ))}
         </div>
       </div>
-      <div style={{ marginBottom:16 }}><FilterRow items={["Todo","Casa familiar","Hotel","Guardería"]} active={type} setActive={setType} color={C.blue} /></div>
-      {loading ? <LoadingRows count={3} /> : lodgings.map(l => (
-        <div key={l.id} style={{ ...makeCard(C), marginBottom:14, opacity: l.available ? 1 : 0.55 }}>
-          <div style={{ height:120, background:`linear-gradient(135deg, ${C.blue}18, ${C.blue}06)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:60, position:"relative" }}>
-            {l.avatar}
-            {l.badge && <div style={{ position:"absolute", top:10, left:10, background:C.blue, borderRadius:10, padding:"4px 10px", fontFamily:F.body, fontSize:11, fontWeight:700, color:"#fff" }}>⭐ {l.badge}</div>}
-            {!l.available && <div style={{ position:"absolute", top:10, right:10, background:C.bgCard + "cc", borderRadius:10, padding:"4px 10px", fontFamily:F.body, fontSize:11, fontWeight:600, color:C.textSub, border:`1px solid ${C.border}` }}>Sin disponibilidad</div>}
-          </div>
-          <div style={{ padding:"14px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
-              <div>
-                <div style={{ fontFamily:F.display, fontWeight:800, fontSize:16, color:C.text }}>{l.name}</div>
-                <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub }}>Con {l.host} · {l.zone}</div>
-                <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub, marginTop:2 }}>⭐ {l.rating} ({l.reviews} reseñas)</div>
-              </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontFamily:F.display, fontWeight:800, fontSize:18, color:C.accent }}>${Number(l.price).toLocaleString()}</div>
-                <div style={{ fontFamily:F.body, fontSize:10, color:C.textMuted }}>/ noche</div>
-              </div>
-            </div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
-              {(l.amenities || []).map((a, i) => <Tag key={i} label={"✓ " + a} color={C.blue} />)}
-            </div>
-            <div style={{ display:"flex", gap:8 }}>
-              <Btn label={l.available ? "📅 Reservar" : "No disponible"} color={l.available ? C.blue : C.textMuted} />
-              <Btn label="💬 Chat" variant="ghost" />
-            </div>
-          </div>
+
+      {/* Banner ubicación */}
+      {locationSource && (
+        <div style={{
+          background: locationSource === "gps" ? `${C.teal}18` : `${C.amber}18`,
+          border: `1px solid ${locationSource === "gps" ? C.teal : C.amber}44`,
+          borderRadius: 14, padding: "10px 14px", marginBottom: 12,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <span style={{ fontSize: 15 }}>📍</span>
+          <span style={{ fontFamily: F.body, fontSize: 12, fontWeight: 600,
+            color: locationSource === "gps" ? C.teal : C.amber, flex: 1 }}>
+            {locationSource === "gps"
+              ? `${osmLodging.length} alojamientos ordenados por cercanía`
+              : "Activa la ubicación para ver los más cercanos a ti"}
+          </span>
         </div>
-      ))}
-      <div style={{ background:C.blue + "11", border:`1px dashed ${C.blue}44`, borderRadius:16, padding:"18px", textAlign:"center" }}>
+      )}
+
+      <div style={{ marginBottom:14 }}>
+        <SearchBar placeholder="Buscar hotel o guardería..." value={search} onChange={setSearch} />
+      </div>
+
+      {/* Cargando */}
+      {osmLoading && osmLodging.length === 0 && bizLodging.length === 0 && (
+        <DogLoader message="Buscando alojamientos…" />
+      )}
+
+      {/* Actualizando silencioso */}
+      {osmLoading && (osmLodging.length > 0 || bizLodging.length > 0) && (
+        <div style={{ textAlign:"center", fontFamily:F.body, fontSize:11, color:C.textMuted,
+          marginBottom:10, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <span style={{ opacity:0.5 }}>🔄</span> Actualizando…
+        </div>
+      )}
+
+      {/* Sin resultados */}
+      {!osmLoading && filteredBiz.length === 0 && filteredOSM.length === 0 && (
+        <div style={{ textAlign:"center", padding:"40px 24px" }}>
+          <div style={{ fontSize:52 }}>🏨</div>
+          <div style={{ fontFamily:F.display, fontWeight:700, fontSize:17, color:C.text, marginTop:14 }}>
+            {search ? `Sin resultados para "${search}"` : "No se encontraron alojamientos"}
+          </div>
+          {!search && (
+            <div style={{ fontFamily:F.body, fontSize:13, color:C.textSub, marginTop:8,
+              lineHeight:1.6, maxWidth:280, margin:"8px auto 0" }}>
+              Aún hay pocos hoteles para mascotas registrados en tu zona.
+              ¿Tienes uno? Regístralo abajo y aparecerá aquí.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Negocios registrados */}
+      {filteredBiz.length > 0 && (
+        <>
+          <SectionLabel label="Negocios registrados" />
+          {filteredBiz.map(b => <BusinessCard key={`biz-${b.id}`} biz={b} />)}
+        </>
+      )}
+
+      {/* Resultados OSM reales */}
+      {filteredOSM.length > 0 && (
+        <>
+          {filteredBiz.length > 0 && <SectionLabel label="Más opciones (OpenStreetMap)" />}
+          {filteredOSM.map(l => (
+            <div key={l.id} style={{ ...makeCard(C), padding:"14px", marginBottom:10 }}>
+              <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                <Avatar emoji="🏨" size={48} color={C.blue + "18"} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:F.body, fontWeight:600, fontSize:14, color:C.text }}>
+                    {l.name ?? "Alojamiento de mascotas"}
+                  </div>
+                  <div style={{ fontFamily:F.body, fontSize:11, color:C.textSub, marginTop:2 }}>
+                    Hotel / Guardería{l.distance ? ` · ${l.distance}` : ""}
+                  </div>
+                  {l.address && (
+                    <div style={{ fontFamily:F.body, fontSize:10, color:C.textMuted, marginTop:3,
+                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {l.address}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
+                  {l.phone
+                    ? <Btn label="📞 Llamar" small color={C.blue} onClick={() => window.open(`tel:${l.phone}`)} />
+                    : <Btn label="🗺 Ver" small color={C.blue}
+                        onClick={() => window.open(
+                          l.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((l.name ?? "hotel mascotas") + " Chile")}`,
+                          "_blank")} />}
+                  {l.phone && (
+                    <Btn label="🗺 Mapa" small variant="ghost"
+                      onClick={() => window.open(l.mapsUrl, "_blank")} />
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div style={{ textAlign:"center", padding:"4px 0 8px" }}>
+            <span style={{ fontFamily:F.body, fontSize:10, color:C.textMuted }}>
+              Datos OSM: © OpenStreetMap contributors
+            </span>
+          </div>
+        </>
+      )}
+
+      {/* CTA anfitrión */}
+      <div style={{ background:C.blue + "11", border:`1px dashed ${C.blue}44`, borderRadius:16, padding:"18px", textAlign:"center", marginTop:8 }}>
         <div style={{ fontSize:28 }}>💰</div>
-        <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14, color:C.blue, marginTop:8 }}>¿Tienes espacio en tu casa?</div>
-        <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub, marginTop:4 }}>Gana dinero cuidando mascotas</div>
-        <div style={{ marginTop:12 }}><Btn label="Ser anfitrión 🏡" color={C.blue} /></div>
+        <div style={{ fontFamily:F.display, fontWeight:700, fontSize:14, color:C.blue, marginTop:8 }}>¿Tienes un hotel o guardería?</div>
+        <div style={{ fontFamily:F.body, fontSize:12, color:C.textSub, marginTop:4 }}>Regístralo gratis y aparece aquí</div>
+        <div style={{ marginTop:12 }}><Btn label="Registrar mi negocio 🏡" color={C.blue} /></div>
       </div>
     </div>
   );

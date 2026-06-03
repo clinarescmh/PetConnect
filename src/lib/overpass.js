@@ -192,6 +192,18 @@ function buildStore({ id, name, lat, lon, phone, address, shop }, uLat, uLon) {
   }
 }
 
+/** Construye un alojamiento (hotel/guardería de mascotas) normalizado. */
+function buildLodging({ id, name, lat, lon, phone, address }, uLat, uLon) {
+  const km = distanceKm(uLat, uLon, lat, lon)
+  return {
+    id, name: name || 'Alojamiento de mascotas',
+    phone: phone || null, address: address || null,
+    distance: formatDistance(km), distanceKm: km,
+    mapsUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+    lat, lon,
+  }
+}
+
 // ── Adaptadores: elemento OSM en vivo / snapshot → campos normalizados ──────────
 
 function vetFromElement(el) {
@@ -209,6 +221,13 @@ function storeFromElement(el) {
   return { id: `${el.type}/${el.id}`, name: osmName(t), lat: c.lat, lon: c.lon,
            phone: osmPhone(t), address: osmAddress(t),
            shop: t.shop || t.craft || t.amenity || null }
+}
+
+function lodgingFromElement(el) {
+  const c = elCoords(el); if (!c) return null
+  const t = el.tags || {}
+  return { id: `${el.type}/${el.id}`, name: osmName(t), lat: c.lat, lon: c.lon,
+           phone: osmPhone(t), address: osmAddress(t) }
 }
 
 function snapAddress(s) {
@@ -237,6 +256,16 @@ function fallbackStores(uLat, uLon) {
     }, uLat, uLon))
     .sort((a, b) => a.distanceKm - b.distanceKm)
     .slice(0, 120)
+}
+
+function fallbackLodging(uLat, uLon) {
+  console.warn('[overpass] usando snapshot de alojamientos')
+  return (fallback.lodging || [])
+    .map(s => buildLodging({
+      id: s.id, name: s.name, lat: s.lat, lon: s.lon, phone: s.phone,
+      address: snapAddress(s),
+    }, uLat, uLon))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
 }
 
 // ── Fetchers públicos ─────────────────────────────────────────────────────────
@@ -286,4 +315,29 @@ export async function fetchNearbyPetShops(lat, lon) {
     console.warn('[overpass] tiendas fallaron todos los endpoints → snapshot:', err?.message)
   }
   return fallbackStores(lat, lon)
+}
+
+/**
+ * Alojamientos para mascotas — hoteles / guarderías (amenity=animal_boarding).
+ * OSM tiene poca cobertura en Chile, así que se buscan TODOS los del país
+ * (bbox nacional) y se ordenan por cercanía. Snapshot real como respaldo.
+ */
+export async function fetchNearbyLodging(lat, lon) {
+  console.log('[overpass] fetchNearbyLodging', lat.toFixed(4), lon.toFixed(4))
+  const CHILE_BBOX = '-56.0,-76.0,-17.5,-66.0'   // sur,oeste,norte,este
+  const query = `
+    [out:json][timeout:25];
+    ( nwr["amenity"="animal_boarding"](${CHILE_BBOX}); );
+    out center 200;`
+  try {
+    const elements = await runOverpass(query)
+    const results = elements.map(lodgingFromElement).filter(e => e && e.name)
+      .map(l => buildLodging(l, lat, lon))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+    if (results.length > 0) return results
+    console.warn('[overpass] alojamientos en vivo vacío → snapshot')
+  } catch (err) {
+    console.warn('[overpass] alojamientos fallaron todos los endpoints → snapshot:', err?.message)
+  }
+  return fallbackLodging(lat, lon)
 }
