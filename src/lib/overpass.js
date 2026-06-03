@@ -1,37 +1,43 @@
 /**
  * Overpass API (OpenStreetMap) — PetConnect
  *
- * Reemplaza la búsqueda de texto libre de Nominatim por consultas por ETIQUETA OSM,
- * que es para lo que Overpass está diseñado. Ventajas:
- *   - 1 sola petición por pestaña (Nominatim disparaba ~14 en paralelo y el servidor
- *     público las bloqueaba por exceder el límite de 1 req/seg → 0 resultados).
- *   - Encuentra POIs reales por tag (amenity=veterinary, shop=pet, shop=pet_grooming),
- *     no depende de adivinar nombres en español chileno.
- *   - Devuelve coordenadas, nombre, dirección, teléfono y horario estructurados.
+ * Busca veterinarias, tiendas de mascotas y peluquerías por ETIQUETA OSM
+ * (amenity=veterinary, shop=pet, shop=pet_grooming, …) — para eso está hecho
+ * Overpass, a diferencia de la búsqueda por texto libre de Nominatim.
  *
- * Los endpoints públicos de Overpass envían `Access-Control-Allow-Origin: *`,
- * así que funciona desde el navegador. Se prueban varios endpoints como respaldo.
+ * Estrategia de fiabilidad (los servidores públicos de Overpass suelen estar
+ * saturados o limitando por IP → 429/504, devolviendo listas vacías):
+ *   1. UNA consulta por pestaña, lanzada en PARALELO a varios endpoints
+ *      (Promise.any) → gana el primero que responda, no se espera a los lentos.
+ *   2. Si todos fallan o no devuelven nada, se usa un SNAPSHOT real de datos OSM
+ *      de Santiago (src/lib/santiagoFallback.json) → la UI nunca queda vacía.
+ *
  * Docs: https://wiki.openstreetmap.org/wiki/Overpass_API
  */
 
+import fallback from './santiagoFallback.json'
+
 const SANTIAGO = { lat: -33.4569, lon: -70.6483 }
 
-// Endpoints públicos con CORS — se prueban en orden hasta que uno responda.
+// Instancias públicas full-planet con CORS. Se corren en paralelo; gana la más
+// rápida. (overpass.osm.ch solo tiene Europa y maps.mail.ru da 403 → excluidos.)
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
 ]
+
+const REQUEST_TIMEOUT_MS = 13_000
 
 // ── Geolocalización ───────────────────────────────────────────────────────────
 
 export async function getLocation(timeoutMs = 6000) {
   return new Promise((resolve) => {
-    const fallback = { ...SANTIAGO, source: 'default' }
+    const fb = { ...SANTIAGO, source: 'default' }
 
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       console.log('[overpass] geolocation no disponible, usando Santiago')
-      return resolve(fallback)
+      return resolve(fb)
     }
 
     const done = (pos) => {
@@ -39,7 +45,7 @@ export async function getLocation(timeoutMs = 6000) {
       const { lat, lon } = pos
       if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
         console.warn('[overpass] coordenadas inválidas:', lat, lon)
-        return resolve(fallback)
+        return resolve(fb)
       }
       resolve(pos)
     }
@@ -83,39 +89,42 @@ export function formatDistance(km) {
 
 // ── Overpass query runner ───────────────────────────────────────────────────────
 
-/**
- * Ejecuta una consulta Overpass QL probando endpoints en orden.
- * Devuelve el array de `elements` o lanza si todos fallan.
- */
-async function runOverpass(query, signal) {
-  let lastErr = null
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      console.log('[overpass] POST', endpoint)
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json',
-        },
-        body: 'data=' + encodeURIComponent(query),
-        signal,
-      })
-      console.log('[overpass] status', res.status, res.ok ? '✓' : '✗')
-      if (!res.ok) { lastErr = new Error(`Overpass HTTP ${res.status}`); continue }
-      // Overpass a veces responde 200 con un cuerpo de error en HTML/XML
-      // (timeout o rate-limit). En ese caso res.json() lanza y probamos el siguiente.
-      const data = await res.json()
-      const elements = Array.isArray(data?.elements) ? data.elements : []
-      console.log('[overpass] elements:', elements.length)
-      return elements
-    } catch (err) {
-      if (err?.name === 'AbortError') throw err
-      console.warn('[overpass] endpoint falló:', endpoint, err?.message)
-      lastErr = err
-    }
+async function fetchEndpoint(endpoint, query) {
+  const ctrl  = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+      },
+      body: 'data=' + encodeURIComponent(query),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) throw new Error(`${endpoint} HTTP ${res.status}`)
+    // Overpass a veces responde 200 con un cuerpo de error HTML/XML (timeout /
+    // rate-limit). En ese caso res.json() lanza y este endpoint se descarta.
+    const data = await res.json()
+    const elements = Array.isArray(data?.elements) ? data.elements : []
+    console.log('[overpass] ✓', endpoint, '→', elements.length)
+    return elements
+  } finally {
+    clearTimeout(timer)
   }
-  throw lastErr || new Error('Overpass: todos los endpoints fallaron')
+}
+
+/**
+ * Lanza la consulta a TODOS los endpoints en paralelo y devuelve el primero que
+ * responda con éxito (Promise.any ignora los que fallan). Lanza si todos fallan.
+ */
+async function runOverpass(query) {
+  return Promise.any(OVERPASS_ENDPOINTS.map(ep =>
+    fetchEndpoint(ep, query).catch(err => {
+      console.warn('[overpass] ✗', ep, err?.message)
+      throw err
+    })
+  ))
 }
 
 // ── Helpers de parseo ───────────────────────────────────────────────────────────
@@ -142,153 +151,139 @@ function osmPhone(tags) {
   return tags.phone || tags['contact:phone'] || tags['contact:mobile'] || null
 }
 
-function toVet(el, uLat, uLon) {
-  const c = elCoords(el)
-  if (!c) return null
-  const tags = el.tags || {}
-  const km   = distanceKm(uLat, uLon, c.lat, c.lon)
-  const urgent =
-    tags.emergency === 'yes' ||
-    /24|urgenc|emergen/i.test([tags.opening_hours, tags.name, tags.description].filter(Boolean).join(' '))
+/** Construye una veterinaria a partir de campos normalizados. */
+function buildVet({ id, name, lat, lon, phone, address, urgent }, uLat, uLon) {
+  const km = distanceKm(uLat, uLon, lat, lon)
   return {
-    id:          `${el.type}/${el.id}`,
-    name:        osmName(tags) || 'Veterinaria',
-    specialty:   'General',
-    open:        true,
-    urgent,
-    phone:       osmPhone(tags),
-    address:     osmAddress(tags),
-    distance:    formatDistance(km),
-    distanceKm:  km,
-    mapsUrl:     `https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`,
-    lat: c.lat, lon: c.lon,
+    id, name: name || 'Veterinaria', specialty: 'General', open: true,
+    urgent: !!urgent, phone: phone || null, address: address || null,
+    distance: formatDistance(km), distanceKm: km,
+    mapsUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+    lat, lon,
   }
 }
 
-/**
- * Clasifica una tienda a partir de sus etiquetas OSM y, como respaldo,
- * de palabras clave en el nombre (naming chileno).
- */
-function detectStoreType(tags) {
-  const shop  = (tags.shop || '').toLowerCase()
-  const craft = (tags.craft || '').toLowerCase()
-  const amen  = (tags.amenity || '').toLowerCase()
+/** Clasifica una tienda por etiqueta OSM y, como respaldo, por nombre. */
+function detectStoreType(shopTag, name) {
+  const shop = (shopTag || '').toLowerCase()
+  const n    = (name || '').toLowerCase()
+  const looksGrooming = /peluquer|baño y corte|baño corte|estética|estetica|grooming|spa canin|corte canin|belleza canin/.test(n)
+  const looksAquarium = /acuari|peces ornamental|acuático|acuatico/.test(n)
 
-  if (shop === 'pet_grooming' || craft === 'pet_grooming' || amen === 'pet_grooming') return 'Peluquería'
+  if (shop === 'pet_grooming') return 'Peluquería'
   if (shop === 'aquatics' || shop === 'aquarium') return 'Peces & acuarios'
   if (shop === 'pet_food') return 'Alimentos para mascotas'
-  if (shop === 'pet') {
-    // shop=pet puede ser tienda, peluquería o acuario — desambiguar por nombre
-    const name = (tags.name || '').toLowerCase()
-    if (/peluquer|baño y corte|baño corte|estética|estetica|grooming|spa canin|corte canin|belleza canin/.test(name)) return 'Peluquería'
-    if (/acuari|peces|acuático|acuatico/.test(name)) return 'Peces & acuarios'
-    return 'Tienda de mascotas'
-  }
-
-  // Respaldo por nombre cuando la etiqueta es genérica
-  const name = (tags.name || '').toLowerCase()
-  if (/peluquer|baño y corte|baño corte|estética|estetica|grooming|spa canin|corte canin|belleza canin/.test(name)) return 'Peluquería'
-  if (/acuari|peces ornamental/.test(name)) return 'Peces & acuarios'
+  if (looksGrooming) return 'Peluquería'
+  if (looksAquarium) return 'Peces & acuarios'
   return 'Tienda de mascotas'
 }
 
-function toStore(el, uLat, uLon) {
-  const c = elCoords(el)
-  if (!c) return null
-  const tags = el.tags || {}
-  const km   = distanceKm(uLat, uLon, c.lat, c.lon)
-  const type = detectStoreType(tags)
+/** Construye una tienda a partir de campos normalizados. */
+function buildStore({ id, name, lat, lon, phone, address, shop }, uLat, uLon) {
+  const km   = distanceKm(uLat, uLon, lat, lon)
+  const type = detectStoreType(shop, name)
   return {
-    id:          `${el.type}/${el.id}`,
-    name:        osmName(tags) || type,
-    type,
-    icon:        type.includes('Peluquer') ? '✂️' : type.includes('Peces') ? '🐠' : '🐾',
-    discount:    null,
-    phone:       osmPhone(tags),
-    address:     osmAddress(tags),
-    distance:    formatDistance(km),
-    distanceKm:  km,
-    mapsUrl:     `https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`,
-    lat: c.lat, lon: c.lon,
+    id, name: name || type, type,
+    icon: type.includes('Peluquer') ? '✂️' : type.includes('Peces') ? '🐠' : '🐾',
+    discount: null, phone: phone || null, address: address || null,
+    distance: formatDistance(km), distanceKm: km,
+    mapsUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+    lat, lon,
   }
+}
+
+// ── Adaptadores: elemento OSM en vivo / snapshot → campos normalizados ──────────
+
+function vetFromElement(el) {
+  const c = elCoords(el); if (!c) return null
+  const t = el.tags || {}
+  const urgent = t.emergency === 'yes' ||
+    /24|urgenc|emergen/i.test([t.opening_hours, t.name, t.description].filter(Boolean).join(' '))
+  return { id: `${el.type}/${el.id}`, name: osmName(t), lat: c.lat, lon: c.lon,
+           phone: osmPhone(t), address: osmAddress(t), urgent }
+}
+
+function storeFromElement(el) {
+  const c = elCoords(el); if (!c) return null
+  const t = el.tags || {}
+  return { id: `${el.type}/${el.id}`, name: osmName(t), lat: c.lat, lon: c.lon,
+           phone: osmPhone(t), address: osmAddress(t),
+           shop: t.shop || t.craft || t.amenity || null }
+}
+
+function snapAddress(s) {
+  const street = [s.street, s.hn].filter(Boolean).join(' ')
+  return [street, s.suburb].filter(Boolean).join(', ') || null
+}
+
+function fallbackVets(uLat, uLon) {
+  console.warn('[overpass] usando snapshot de veterinarias de Santiago')
+  return (fallback.vets || [])
+    .map(s => buildVet({
+      id: s.id, name: s.name, lat: s.lat, lon: s.lon, phone: s.phone,
+      address: snapAddress(s),
+      urgent: s.emergency === 'yes' || /24|urgenc|emergen/i.test([s.oh, s.name].filter(Boolean).join(' ')),
+    }, uLat, uLon))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, 80)
+}
+
+function fallbackStores(uLat, uLon) {
+  console.warn('[overpass] usando snapshot de tiendas de Santiago')
+  return (fallback.stores || [])
+    .map(s => buildStore({
+      id: s.id, name: s.name, lat: s.lat, lon: s.lon, phone: s.phone,
+      address: snapAddress(s), shop: s.shop,
+    }, uLat, uLon))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, 120)
 }
 
 // ── Fetchers públicos ─────────────────────────────────────────────────────────
 
-/**
- * Veterinarias cercanas (amenity=veterinary). Radio creciente hasta encontrar
- * resultados: 8km → 20km → 40km. Devuelve ordenadas por distancia.
- */
+/** Veterinarias cercanas (amenity=veterinary), radio 18km. */
 export async function fetchNearbyVets(lat, lon) {
   console.log('[overpass] fetchNearbyVets', lat.toFixed(4), lon.toFixed(4))
-  const ctrl   = new AbortController()
-  const safety = setTimeout(() => ctrl.abort(), 25_000)
-
+  const query = `
+    [out:json][timeout:20];
+    ( nwr["amenity"="veterinary"](around:18000,${lat},${lon}); );
+    out center 80;`
   try {
-    for (const radius of [8000, 20000, 40000]) {
-      const query = `
-        [out:json][timeout:25];
-        (
-          nwr["amenity"="veterinary"](around:${radius},${lat},${lon});
-        );
-        out center 60;`
-      try {
-        const elements = await runOverpass(query, ctrl.signal)
-        const results = elements
-          .map(e => toVet(e, lat, lon))
-          .filter(Boolean)
-          .sort((a, b) => a.distanceKm - b.distanceKm)
-        console.log(`[overpass] vets radio=${radius}m →`, results.length)
-        if (results.length > 0) { clearTimeout(safety); return results }
-      } catch (err) {
-        if (err?.name === 'AbortError') throw err
-        console.warn('[overpass] vets error radio=' + radius + ':', err?.message)
-      }
-    }
-  } finally {
-    clearTimeout(safety)
+    const elements = await runOverpass(query)
+    const results = elements.map(vetFromElement).filter(Boolean)
+      .map(v => buildVet(v, lat, lon))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+    if (results.length > 0) return results
+    console.warn('[overpass] vets en vivo vacío → snapshot')
+  } catch (err) {
+    console.warn('[overpass] vets fallaron todos los endpoints → snapshot:', err?.message)
   }
-  return []
+  return fallbackVets(lat, lon)
 }
 
-/**
- * Tiendas de mascotas, peluquerías y acuarios cercanos.
- * Una sola consulta que combina todas las etiquetas OSM relevantes.
- * Radio creciente: 10km → 25km → 50km.
- */
+/** Tiendas de mascotas + peluquerías + acuarios cercanos, radio 22km. */
 export async function fetchNearbyPetShops(lat, lon) {
   console.log('[overpass] fetchNearbyPetShops', lat.toFixed(4), lon.toFixed(4))
-  const ctrl   = new AbortController()
-  const safety = setTimeout(() => ctrl.abort(), 25_000)
-
+  const query = `
+    [out:json][timeout:20];
+    (
+      nwr["shop"="pet"](around:22000,${lat},${lon});
+      nwr["shop"="pet_food"](around:22000,${lat},${lon});
+      nwr["shop"="pet_grooming"](around:22000,${lat},${lon});
+      nwr["craft"="pet_grooming"](around:22000,${lat},${lon});
+      nwr["amenity"="pet_grooming"](around:22000,${lat},${lon});
+      nwr["shop"="aquatics"](around:22000,${lat},${lon});
+    );
+    out center 150;`
   try {
-    for (const radius of [10000, 25000, 50000]) {
-      const query = `
-        [out:json][timeout:25];
-        (
-          nwr["shop"="pet"](around:${radius},${lat},${lon});
-          nwr["shop"="pet_food"](around:${radius},${lat},${lon});
-          nwr["shop"="pet_grooming"](around:${radius},${lat},${lon});
-          nwr["craft"="pet_grooming"](around:${radius},${lat},${lon});
-          nwr["amenity"="pet_grooming"](around:${radius},${lat},${lon});
-          nwr["shop"="aquatics"](around:${radius},${lat},${lon});
-        );
-        out center 120;`
-      try {
-        const elements = await runOverpass(query, ctrl.signal)
-        const results = elements
-          .map(e => toStore(e, lat, lon))
-          .filter(Boolean)
-          .sort((a, b) => a.distanceKm - b.distanceKm)
-        console.log(`[overpass] stores radio=${radius}m →`, results.length)
-        if (results.length > 0) { clearTimeout(safety); return results }
-      } catch (err) {
-        if (err?.name === 'AbortError') throw err
-        console.warn('[overpass] stores error radio=' + radius + ':', err?.message)
-      }
-    }
-  } finally {
-    clearTimeout(safety)
+    const elements = await runOverpass(query)
+    const results = elements.map(storeFromElement).filter(Boolean)
+      .map(s => buildStore(s, lat, lon))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+    if (results.length > 0) return results
+    console.warn('[overpass] tiendas en vivo vacío → snapshot')
+  } catch (err) {
+    console.warn('[overpass] tiendas fallaron todos los endpoints → snapshot:', err?.message)
   }
-  return []
+  return fallbackStores(lat, lon)
 }
