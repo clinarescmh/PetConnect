@@ -13,7 +13,11 @@ class ErrorBoundaryClass extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error('[PetConnect ErrorBoundary]', error.message, info.componentStack)
+    console.error('━━━ PETCONNECT ERROR ━━━')
+    console.error('Mensaje:', error.message)
+    console.error('Stack:',   error.stack)
+    console.error('Componente:', info.componentStack)
+    console.error('━━━━━━━━━━━━━━━━━━━━━━')
   }
 
   render() {
