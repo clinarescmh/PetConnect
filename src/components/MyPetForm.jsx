@@ -90,7 +90,7 @@ export default function MyPetForm({ mode = 'welcome', initialData, onSave, onClo
 
   /* ── Pantalla de éxito ── */
   if (done) return (
-    <div style={{ position:'fixed', inset:0, zIndex:400, background:C.bg, maxWidth:420, margin:'0 auto',
+    <div style={{ position:'fixed', inset:0, zIndex:400, background:C.bg, maxWidth:'var(--app-max)', margin:'0 auto',
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14 }}>
       <div style={{ fontSize:72 }}>{selectedSpecies?.emoji || '🐾'}</div>
       <div style={{ fontFamily:F.display, fontWeight:800, fontSize:22, color:C.text }}>
@@ -104,7 +104,7 @@ export default function MyPetForm({ mode = 'welcome', initialData, onSave, onClo
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:400, background:C.bg,
-      overflowY:'auto', maxWidth:420, margin:'0 auto' }}>
+      overflowY:'auto', overflowX:'hidden', maxWidth:'var(--app-max)', margin:'0 auto' }}>
       <style>{`* { box-sizing: border-box; }`}</style>
 
       {/* ── Header según modo ── */}

@@ -102,7 +102,7 @@ export default function SearchScreen({ onClose, onOpenPet }) {
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:260, background:C.bg,
-      overflowY:'auto', maxWidth:420, margin:'0 auto' }}>
+      overflowY:'auto', overflowX:'hidden', maxWidth:'var(--app-max)', margin:'0 auto' }}>
 
       {/* Header sticky con buscador */}
       <div style={{ padding:'14px 16px', background:C.bg,

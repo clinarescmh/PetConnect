@@ -73,7 +73,7 @@ export default function PetProfile({ post, allPosts = [], onClose }) {
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:250, background:C.bg,
-      overflowY:'auto', maxWidth:420, margin:'0 auto' }}>
+      overflowY:'auto', maxWidth:'var(--app-max)', margin:'0 auto' }}>
 
       {/* ── Hero ── */}
       <div style={{ position:'relative', height:300, flexShrink:0, background:C.bgElevated }}>

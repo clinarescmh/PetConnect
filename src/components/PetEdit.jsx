@@ -69,7 +69,7 @@ export default function PetEdit({ pet, onSave, onClose }) {
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:350,
-      background:C.bg, overflowY:'auto', maxWidth:420, margin:'0 auto' }}>
+      background:C.bg, overflowY:'auto', overflowX:'hidden', maxWidth:'var(--app-max)', margin:'0 auto' }}>
       <style>{`* { box-sizing:border-box }`}</style>
 
       {/* Header */}

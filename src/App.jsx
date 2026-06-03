@@ -644,9 +644,9 @@ function NavBar({ active, setActive, notifCount }) {
   ];
   return (
     <div style={{
-      position:"fixed", bottom:16,
+      position:"fixed", bottom:"calc(16px + env(safe-area-inset-bottom))",
       left:"50%", transform:"translateX(-50%)",
-      width:"calc(min(100vw, 420px) - 32px)",
+      width:"calc(min(100vw, var(--app-max)) - 32px)",
       display:"flex",
       background: isDark ? "rgba(19,34,64,0.82)" : "rgba(255,255,255,0.88)",
       backdropFilter:"blur(24px)", WebkitBackdropFilter:"blur(24px)",
@@ -2537,16 +2537,16 @@ export default function PetConnect({ isDark, toggleTheme }) {
       )}
       {/* Modales de registro (full-screen) */}
       {modal === "business" && (
-        <div style={{ position:"fixed", inset:0, zIndex:300, background:C.bg, overflowY:"auto" }}>
+        <div style={{ position:"fixed", inset:0, zIndex:300, background:C.bg, overflowY:"auto", overflowX:"hidden", width:"100%", maxWidth:"var(--app-max)", margin:"0 auto" }}>
           <BusinessForm onClose={() => setModal(null)} />
         </div>
       )}
       {modal === "walker" && (
-        <div style={{ position:"fixed", inset:0, zIndex:300, background:C.bg, overflowY:"auto" }}>
+        <div style={{ position:"fixed", inset:0, zIndex:300, background:C.bg, overflowY:"auto", overflowX:"hidden", width:"100%", maxWidth:"var(--app-max)", margin:"0 auto" }}>
           <WalkerForm onClose={() => setModal(null)} />
         </div>
       )}
-      <div style={{ maxWidth:420, margin:"0 auto", background:C.bg, minHeight:"100vh", display:"flex", flexDirection:"column" }}>
+      <div style={{ width:"100%", maxWidth:"var(--app-max)", margin:"0 auto", background:C.bg, minHeight:"100vh", display:"flex", flexDirection:"column" }}>
         <style>{`
           * { box-sizing: border-box; }
           html, body { margin: 0; background: ${C.bg};
@@ -2631,7 +2631,7 @@ export default function PetConnect({ isDark, toggleTheme }) {
             />
           )}
         </div>
-        <div style={{ flex:1, overflowY:"auto", paddingBottom:100 }}>
+        <div style={{ flex:1, overflowY:"auto", overflowX:"hidden", paddingBottom:"calc(100px + env(safe-area-inset-bottom))" }}>
           <TabErrorBoundary key={currentTab}>
             <div className="pc-page">{content[currentTab]}</div>
           </TabErrorBoundary>

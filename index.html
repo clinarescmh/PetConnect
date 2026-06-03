@@ -3,8 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/jpeg" href="/icon.jpeg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>PetConnect — La Red Social de tu Mascota</title>
+    <style>
+      /* Ancho de columna de la app — fuente única de verdad (mobile-first) */
+      :root { --app-max: 480px; }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 100%; max-width: 100%;
+        overflow-x: hidden;             /* nunca scroll horizontal */
+        -webkit-text-size-adjust: 100%; /* iOS no reescala el texto */
+      }
+      #root { width: 100%; max-width: 100%; overflow-x: hidden; }
+      img, video { max-width: 100%; }   /* medios nunca desbordan */
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet" />

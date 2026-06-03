@@ -85,7 +85,7 @@ export default function LoginScreen({ onGuestAccess, onNewUserRegistered, isDark
 
   return (
     <div style={{
-      maxWidth: 420, margin: "0 auto", background: C.bg, minHeight: "100vh",
+      width: "100%", maxWidth: "var(--app-max)", margin: "0 auto", background: C.bg, minHeight: "100vh",
       display: "flex", flexDirection: "column", alignItems: "center",
       justifyContent: "center", padding: "32px 24px",
     }}>

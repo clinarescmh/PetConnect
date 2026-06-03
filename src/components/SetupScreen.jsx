@@ -54,7 +54,7 @@ export default function SetupScreen({ onComplete }) {
   )
 
   if (done) return (
-    <div style={{ position:'fixed', inset:0, zIndex:500, background:C.bg, maxWidth:420, margin:'0 auto',
+    <div style={{ position:'fixed', inset:0, zIndex:500, background:C.bg, maxWidth:'var(--app-max)', margin:'0 auto',
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, padding:28 }}>
       <div style={{ fontSize:72 }}>{SPECIES.find(s => s.id === pet.especie)?.emoji || '🐾'}</div>
       <div style={{ fontFamily:F.display, fontWeight:800, fontSize:22, color:C.text, textAlign:'center' }}>
@@ -68,7 +68,7 @@ export default function SetupScreen({ onComplete }) {
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:500, background:C.bg,
-      overflowY:'auto', maxWidth:420, margin:'0 auto' }}>
+      overflowY:'auto', overflowX:'hidden', maxWidth:'var(--app-max)', margin:'0 auto' }}>
       <style>{`* { box-sizing: border-box; } body { margin:0; }`}</style>
 
       {/* Hero */}

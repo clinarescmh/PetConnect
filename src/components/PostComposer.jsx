@@ -82,7 +82,7 @@ export default function PostComposer({ onClose, onPublish }) {
   }
 
   if (done) return (
-    <div style={{ position:'fixed', inset:0, zIndex:400, background:C.bg, maxWidth:420, margin:'0 auto',
+    <div style={{ position:'fixed', inset:0, zIndex:400, background:C.bg, maxWidth:'var(--app-max)', margin:'0 auto',
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
       <div style={{ fontSize:64 }}>✅</div>
       <div style={{ fontFamily:F.display, fontWeight:800, fontSize:20, color:C.text }}>¡Publicado!</div>
@@ -92,7 +92,7 @@ export default function PostComposer({ onClose, onPublish }) {
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:400, background:C.bg,
-      overflowY:'auto', maxWidth:420, margin:'0 auto' }}>
+      overflowY:'auto', overflowX:'hidden', maxWidth:'var(--app-max)', margin:'0 auto' }}>
       <style>{`* { box-sizing: border-box; }`}</style>
 
       {/* Header */}

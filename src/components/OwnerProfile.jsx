@@ -31,7 +31,7 @@ export default function OwnerProfile({ onClose, onOpenPet, onAddPet }) {
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:270, background:C.bg,
-      overflowY:'auto', maxWidth:420, margin:'0 auto' }}>
+      overflowY:'auto', maxWidth:'var(--app-max)', margin:'0 auto' }}>
 
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', gap:12, padding:'18px 18px 14px',

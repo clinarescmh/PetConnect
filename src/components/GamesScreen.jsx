@@ -1066,7 +1066,7 @@ export default function GamesScreen({ onClose }) {
   const Comp = currentGame?.Comp
 
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:260, background:C.bg, overflowY:'auto', maxWidth:420, margin:'0 auto' }}>
+    <div style={{ position:'fixed', inset:0, zIndex:260, background:C.bg, overflowY:'auto', maxWidth:'var(--app-max)', margin:'0 auto' }}>
       <GameStyles />
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', gap:12, padding:'18px 18px 14px',
