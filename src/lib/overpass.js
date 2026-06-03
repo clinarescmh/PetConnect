@@ -1,14 +1,27 @@
 /**
- * Nominatim (OpenStreetMap geocoding) — PetConnect
- * Reemplaza Overpass para evitar problemas de CORS en producción.
- * Sin API key, gratis, CORS abierto por defecto.
- * Docs: https://nominatim.org/release-docs/latest/api/Search/
+ * Overpass API (OpenStreetMap) — PetConnect
  *
- * Límite de uso: 1 petición/segundo — para proyectos personales/demo es suficiente.
+ * Reemplaza la búsqueda de texto libre de Nominatim por consultas por ETIQUETA OSM,
+ * que es para lo que Overpass está diseñado. Ventajas:
+ *   - 1 sola petición por pestaña (Nominatim disparaba ~14 en paralelo y el servidor
+ *     público las bloqueaba por exceder el límite de 1 req/seg → 0 resultados).
+ *   - Encuentra POIs reales por tag (amenity=veterinary, shop=pet, shop=pet_grooming),
+ *     no depende de adivinar nombres en español chileno.
+ *   - Devuelve coordenadas, nombre, dirección, teléfono y horario estructurados.
+ *
+ * Los endpoints públicos de Overpass envían `Access-Control-Allow-Origin: *`,
+ * así que funciona desde el navegador. Se prueban varios endpoints como respaldo.
+ * Docs: https://wiki.openstreetmap.org/wiki/Overpass_API
  */
 
-const BASE     = 'https://nominatim.openstreetmap.org/search'
 const SANTIAGO = { lat: -33.4569, lon: -70.6483 }
+
+// Endpoints públicos con CORS — se prueban en orden hasta que uno responda.
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+]
 
 // ── Geolocalización ───────────────────────────────────────────────────────────
 
@@ -17,7 +30,7 @@ export async function getLocation(timeoutMs = 6000) {
     const fallback = { ...SANTIAGO, source: 'default' }
 
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      console.log('[nominatim] geolocation no disponible, usando Santiago')
+      console.log('[overpass] geolocation no disponible, usando Santiago')
       return resolve(fallback)
     }
 
@@ -25,24 +38,24 @@ export async function getLocation(timeoutMs = 6000) {
       clearTimeout(timer)
       const { lat, lon } = pos
       if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-        console.warn('[nominatim] coordenadas inválidas:', lat, lon)
+        console.warn('[overpass] coordenadas inválidas:', lat, lon)
         return resolve(fallback)
       }
       resolve(pos)
     }
 
     const timer = setTimeout(() => {
-      console.warn('[nominatim] getLocation timeout, usando Santiago')
+      console.warn('[overpass] getLocation timeout, usando Santiago')
       resolve({ ...SANTIAGO, source: 'timeout' })
     }, timeoutMs)
 
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        console.log('[nominatim] GPS obtenido:', coords.latitude.toFixed(4), coords.longitude.toFixed(4))
+        console.log('[overpass] GPS obtenido:', coords.latitude.toFixed(4), coords.longitude.toFixed(4))
         done({ lat: coords.latitude, lon: coords.longitude, source: 'gps' })
       },
       (err) => {
-        console.warn('[nominatim] GPS denegado/error:', err?.code, err?.message)
+        console.warn('[overpass] GPS denegado/error:', err?.code, err?.message)
         done({ ...SANTIAGO, source: 'denied' })
       },
       { timeout: timeoutMs - 500, maximumAge: 120_000, enableHighAccuracy: false }
@@ -68,215 +81,169 @@ export function formatDistance(km) {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`
 }
 
-// ── Nominatim helpers ─────────────────────────────────────────────────────────
+// ── Overpass query runner ───────────────────────────────────────────────────────
 
 /**
- * Bounding box para Nominatim.
- * Formato: lon_min,lat_max,lon_max,lat_min  (left,top,right,bottom)
+ * Ejecuta una consulta Overpass QL probando endpoints en orden.
+ * Devuelve el array de `elements` o lanza si todos fallan.
  */
-function makeBbox(lat, lon, km) {
-  const dLat = km / 111
-  const dLon = km / (111 * Math.cos((lat * Math.PI) / 180))
-  return [
-    (lon - dLon).toFixed(5),  // left
-    (lat + dLat).toFixed(5),  // top
-    (lon + dLon).toFixed(5),  // right
-    (lat - dLat).toFixed(5),  // bottom
-  ].join(',')
-}
-
-async function searchNominatim(params, signal) {
-  const url = new URL(BASE)
-  // namedetails=1 devuelve el campo namedetails.name (más preciso que address.amenity)
-  const defaults = { format: 'json', addressdetails: '1', namedetails: '1', limit: '25', countrycodes: 'cl' }
-  Object.entries({ ...defaults, ...params }).forEach(([k, v]) =>
-    url.searchParams.set(k, String(v))
-  )
-
-  console.log('[nominatim] GET', decodeURIComponent(url.search.slice(0, 120)) + '…')
-
-  const res = await fetch(url.toString(), {
-    headers: { 'Accept': 'application/json' },
-    signal,
-  })
-
-  console.log('[nominatim] status', res.status, res.ok ? '✓' : '✗')
-  if (!res.ok) throw new Error(`Nominatim HTTP ${res.status}`)
-
-  const data = await res.json()
-  console.log('[nominatim] items devueltos:', Array.isArray(data) ? data.length : typeof data)
-  return Array.isArray(data) ? data : []
-}
-
-// ── Parsers ───────────────────────────────────────────────────────────────────
-
-const GENERIC_NAMES = new Set(['veterinaria', 'tienda', 'farmacia', 'grooming', 'pet shop', 'sin nombre', ''])
-
-function extractName(item) {
-  const a  = item.address     || {}
-  const nd = item.namedetails || {}
-
-  // 1. namedetails.name — más preciso (requiere namedetails=1)
-  const fromND = nd.name?.trim()
-
-  // 2. address fields
-  const fromAddr = (a.amenity || a.shop || a.building)?.trim()
-
-  // 3. Primera parte de display_name
-  const fromDisplay = item.display_name?.split(',')[0]?.trim()
-
-  // Elegir el primero que no sea genérico
-  for (const candidate of [fromND, fromAddr, fromDisplay]) {
-    if (candidate && !GENERIC_NAMES.has(candidate.toLowerCase())) return candidate
-  }
-
-  // Fallback: usar dirección como nombre si todo lo anterior es genérico
-  const addr = extractAddress(item)
-  return addr || fromDisplay || 'Sin nombre'
-}
-
-function extractAddress(item) {
-  const a = item.address || {}
-  const street  = [a.road, a.house_number].filter(Boolean).join(' ')
-  const suburb  = a.suburb || a.neighbourhood || a.city_district || ''
-  if (street || suburb) return [street, suburb].filter(Boolean).join(', ')
-  // fallback: second and third segment of display_name
-  return item.display_name.split(',').slice(1, 3).map(s => s.trim()).join(', ') || null
-}
-
-function toVet(item, uLat, uLon) {
-  try {
-    const lat = parseFloat(item.lat)
-    const lon = parseFloat(item.lon)
-    if (!isFinite(lat) || !isFinite(lon)) return null
-    const km = distanceKm(uLat, uLon, lat, lon)
-    return {
-      id:          item.place_id,
-      name:        extractName(item),
-      specialty:   'General',
-      open:        true,
-      urgent:      false,
-      phone:       null,
-      address:     extractAddress(item),
-      distance:    formatDistance(km),
-      distanceKm:  km,
-      mapsUrl:     `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
-      lat, lon,
+async function runOverpass(query, signal) {
+  let lastErr = null
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      console.log('[overpass] POST', endpoint)
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: 'data=' + encodeURIComponent(query),
+        signal,
+      })
+      console.log('[overpass] status', res.status, res.ok ? '✓' : '✗')
+      if (!res.ok) { lastErr = new Error(`Overpass HTTP ${res.status}`); continue }
+      // Overpass a veces responde 200 con un cuerpo de error en HTML/XML
+      // (timeout o rate-limit). En ese caso res.json() lanza y probamos el siguiente.
+      const data = await res.json()
+      const elements = Array.isArray(data?.elements) ? data.elements : []
+      console.log('[overpass] elements:', elements.length)
+      return elements
+    } catch (err) {
+      if (err?.name === 'AbortError') throw err
+      console.warn('[overpass] endpoint falló:', endpoint, err?.message)
+      lastErr = err
     }
-  } catch { return null }
+  }
+  throw lastErr || new Error('Overpass: todos los endpoints fallaron')
+}
+
+// ── Helpers de parseo ───────────────────────────────────────────────────────────
+
+function elCoords(el) {
+  if (isFinite(el.lat) && isFinite(el.lon)) return { lat: el.lat, lon: el.lon }
+  if (el.center && isFinite(el.center.lat) && isFinite(el.center.lon)) {
+    return { lat: el.center.lat, lon: el.center.lon }
+  }
+  return null
+}
+
+function osmName(tags) {
+  return (tags.name || tags['name:es'] || tags.brand || tags.operator || '').trim() || null
+}
+
+function osmAddress(tags) {
+  const street = [tags['addr:street'], tags['addr:housenumber']].filter(Boolean).join(' ')
+  const area   = tags['addr:suburb'] || tags['addr:city'] || tags['addr:neighbourhood'] || ''
+  return [street, area].filter(Boolean).join(', ') || null
+}
+
+function osmPhone(tags) {
+  return tags.phone || tags['contact:phone'] || tags['contact:mobile'] || null
+}
+
+function toVet(el, uLat, uLon) {
+  const c = elCoords(el)
+  if (!c) return null
+  const tags = el.tags || {}
+  const km   = distanceKm(uLat, uLon, c.lat, c.lon)
+  const urgent =
+    tags.emergency === 'yes' ||
+    /24|urgenc|emergen/i.test([tags.opening_hours, tags.name, tags.description].filter(Boolean).join(' '))
+  return {
+    id:          `${el.type}/${el.id}`,
+    name:        osmName(tags) || 'Veterinaria',
+    specialty:   'General',
+    open:        true,
+    urgent,
+    phone:       osmPhone(tags),
+    address:     osmAddress(tags),
+    distance:    formatDistance(km),
+    distanceKm:  km,
+    mapsUrl:     `https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`,
+    lat: c.lat, lon: c.lon,
+  }
 }
 
 /**
- * Detecta el tipo de tienda usando THREE fuentes en orden de confiabilidad:
- * 1. class+type de Nominatim (siempre presentes en la respuesta JSON)
- * 2. tags.shop de OSM (raramente presente en respuestas Nominatim)
- * 3. Palabras clave en el nombre (cubre naming chileno)
+ * Clasifica una tienda a partir de sus etiquetas OSM y, como respaldo,
+ * de palabras clave en el nombre (naming chileno).
  */
-function detectStoreType(item) {
-  // 1. Campos class + type de Nominatim ─ SIEMPRE disponibles, máxima confiabilidad
-  //    Ejemplos reales: class="amenity" type="pet_grooming"
-  //                     class="shop"    type="groomer"
-  //                     class="shop"    type="pet"
-  const nomType  = (item.type  || '').toLowerCase()
-  const nomClass = (item.class || '').toLowerCase()
+function detectStoreType(tags) {
+  const shop  = (tags.shop || '').toLowerCase()
+  const craft = (tags.craft || '').toLowerCase()
+  const amen  = (tags.amenity || '').toLowerCase()
 
-  if (nomType === 'pet_grooming' || nomType === 'groomer' ||
-      (nomClass === 'shop' && nomType === 'groomer')) {
-    return 'Peluquería'
-  }
-  if (nomType === 'pet' || nomType === 'pet_food' ||
-      (nomClass === 'shop' && (nomType === 'pet' || nomType === 'pet_food'))) {
+  if (shop === 'pet_grooming' || craft === 'pet_grooming' || amen === 'pet_grooming') return 'Peluquería'
+  if (shop === 'aquatics' || shop === 'aquarium') return 'Peces & acuarios'
+  if (shop === 'pet_food') return 'Alimentos para mascotas'
+  if (shop === 'pet') {
+    // shop=pet puede ser tienda, peluquería o acuario — desambiguar por nombre
+    const name = (tags.name || '').toLowerCase()
+    if (/peluquer|baño y corte|baño corte|estética|estetica|grooming|spa canin|corte canin|belleza canin/.test(name)) return 'Peluquería'
+    if (/acuari|peces|acuático|acuatico/.test(name)) return 'Peces & acuarios'
     return 'Tienda de mascotas'
   }
-  if (nomType === 'aquarium' || (nomClass === 'shop' && nomType === 'aquarium')) {
-    return 'Peces & acuarios'
-  }
 
-  // 2. tags.shop de OSM — casi nunca viene en respuestas Nominatim, por completitud
-  const tags = item.tags || {}
-  const OSM_MAP = {
-    pet:       'Tienda de mascotas',
-    pet_food:  'Alimentos para mascotas',
-    groomer:   'Peluquería',
-    aquarium:  'Peces & acuarios',
-    animal:    'Animales & accesorios',
-  }
-  if (tags.shop && OSM_MAP[tags.shop]) return OSM_MAP[tags.shop]
-
-  // 3. Palabras clave en nombre — imprescindible para naming chileno
-  const haystack = [
-    item.namedetails?.name,
-    item.address?.amenity,
-    item.address?.shop,
-    item.display_name,
-  ].filter(Boolean).join(' ').toLowerCase()
-
-  const GROOMING_KW = [
-    'peluquer', 'baño y corte', 'baño corte', 'estética', 'estetica',
-    'grooming', 'spa canin', 'corte canin', 'belleza canin',
-  ]
-  if (GROOMING_KW.some(kw => haystack.includes(kw))) return 'Peluquería'
-
+  // Respaldo por nombre cuando la etiqueta es genérica
+  const name = (tags.name || '').toLowerCase()
+  if (/peluquer|baño y corte|baño corte|estética|estetica|grooming|spa canin|corte canin|belleza canin/.test(name)) return 'Peluquería'
+  if (/acuari|peces ornamental/.test(name)) return 'Peces & acuarios'
   return 'Tienda de mascotas'
 }
 
-function toStore(item, uLat, uLon) {
-  try {
-    const lat = parseFloat(item.lat)
-    const lon = parseFloat(item.lon)
-    if (!isFinite(lat) || !isFinite(lon)) return null
-    const km = distanceKm(uLat, uLon, lat, lon)
-    const storeType = detectStoreType(item)
-    return {
-      id:          item.place_id,
-      name:        extractName(item),
-      type:        storeType,
-      icon:        storeType.includes('Peluquer') ? '✂️' : '🐾',
-      discount:    null,
-      phone:       null,
-      address:     extractAddress(item),
-      distance:    formatDistance(km),
-      distanceKm:  km,
-      mapsUrl:     `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
-      lat, lon,
-    }
-  } catch { return null }
+function toStore(el, uLat, uLon) {
+  const c = elCoords(el)
+  if (!c) return null
+  const tags = el.tags || {}
+  const km   = distanceKm(uLat, uLon, c.lat, c.lon)
+  const type = detectStoreType(tags)
+  return {
+    id:          `${el.type}/${el.id}`,
+    name:        osmName(tags) || type,
+    type,
+    icon:        type.includes('Peluquer') ? '✂️' : type.includes('Peces') ? '🐠' : '🐾',
+    discount:    null,
+    phone:       osmPhone(tags),
+    address:     osmAddress(tags),
+    distance:    formatDistance(km),
+    distanceKm:  km,
+    mapsUrl:     `https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`,
+    lat: c.lat, lon: c.lon,
+  }
 }
 
 // ── Fetchers públicos ─────────────────────────────────────────────────────────
 
 /**
- * Busca veterinarias con texto libre — más tolerante que amenity=veterinary.
- * Intenta múltiples términos y radio creciente hasta cubrir la RM completa.
+ * Veterinarias cercanas (amenity=veterinary). Radio creciente hasta encontrar
+ * resultados: 8km → 20km → 40km. Devuelve ordenadas por distancia.
  */
 export async function fetchNearbyVets(lat, lon) {
-  console.log('[nominatim] fetchNearbyVets', lat.toFixed(4), lon.toFixed(4))
-  const ctrl = new AbortController()
+  console.log('[overpass] fetchNearbyVets', lat.toFixed(4), lon.toFixed(4))
+  const ctrl   = new AbortController()
   const safety = setTimeout(() => ctrl.abort(), 25_000)
 
-  // Bounding box de la Región Metropolitana completa
-  const RM_BBOX = '-71.2,-33.0,-70.0,-34.0'
-
-  const queries = [
-    { q: 'veterinaria',                    viewbox: makeBbox(lat, lon, 15), bounded: '0' },
-    { q: 'clinica veterinaria',            viewbox: makeBbox(lat, lon, 20), bounded: '0' },
-    { q: 'veterinaria santiago',           viewbox: RM_BBOX,                bounded: '0' },
-    { q: 'clinica veterinaria santiago chile' },
-  ]
-
   try {
-    for (const params of queries) {
+    for (const radius of [8000, 20000, 40000]) {
+      const query = `
+        [out:json][timeout:25];
+        (
+          nwr["amenity"="veterinary"](around:${radius},${lat},${lon});
+        );
+        out center 60;`
       try {
-        const items = await searchNominatim(params, ctrl.signal)
-        console.log('[nominatim] vets q="' + params.q + '":', items.length)
-        const results = items.map(i => toVet(i, lat, lon)).filter(Boolean)
+        const elements = await runOverpass(query, ctrl.signal)
+        const results = elements
+          .map(e => toVet(e, lat, lon))
+          .filter(Boolean)
           .sort((a, b) => a.distanceKm - b.distanceKm)
+        console.log(`[overpass] vets radio=${radius}m →`, results.length)
         if (results.length > 0) { clearTimeout(safety); return results }
       } catch (err) {
         if (err?.name === 'AbortError') throw err
-        console.warn('[nominatim] vets error q="' + params.q + '":', err?.message)
+        console.warn('[overpass] vets error radio=' + radius + ':', err?.message)
       }
-      await new Promise(r => setTimeout(r, 400))
     }
   } finally {
     clearTimeout(safety)
@@ -285,91 +252,41 @@ export async function fetchNearbyVets(lat, lon) {
 }
 
 /**
- * Busca tiendas Y peluquerías en paralelo, estrategia diferenciada:
- *
- * TIENDAS: bbox + bounded=1 (restringe al área del usuario)
- *   - Nombres reales en Chile: "Mundo Mascotas", "PetZoo", "Animales X"
- *
- * PELUQUERÍAS: solo countrycodes=cl, SIN viewbox ni bounded
- *   - Confirmado por prueba directa de URL: q=peluqueria canina&countrycodes=cl → 5 resultados en Santiago
- *   - Filtro de 30km aplicado DESPUÉS para descartar resultados fuera del área
- *
- * Ambos resultados se combinan, deduplicados y ordenados por distancia.
+ * Tiendas de mascotas, peluquerías y acuarios cercanos.
+ * Una sola consulta que combina todas las etiquetas OSM relevantes.
+ * Radio creciente: 10km → 25km → 50km.
  */
 export async function fetchNearbyPetShops(lat, lon) {
-  console.log('[nominatim] fetchNearbyPetShops', lat.toFixed(4), lon.toFixed(4))
+  console.log('[overpass] fetchNearbyPetShops', lat.toFixed(4), lon.toFixed(4))
   const ctrl   = new AbortController()
   const safety = setTimeout(() => ctrl.abort(), 25_000)
-  const MAX_KM = 30
-  const bbox   = makeBbox(lat, lon, 25)
 
   try {
-    const [tiendaSettled, pelucaSettled, acuarioSettled] = await Promise.allSettled([
-
-      // ── TIENDAS: bbox estricto ──────────────────────────────────────────────
-      Promise.allSettled(
-        ['mascotas', 'pet', 'animales'].map(q =>
-          searchNominatim({ q, viewbox: bbox, bounded: '1', limit: '12' }, ctrl.signal)
-            .catch(() => [])
-        )
-      ).then(r => r.flatMap(x => x.status === 'fulfilled' ? x.value : [])),
-
-      // ── PELUQUERÍAS: búsqueda nacional + filtro de distancia ───────────────
-      // Cada query loguea su conteo individual ANTES del dedup.
-      Promise.allSettled(
-        ['peluqueria canina', 'estetica canina', 'spa canino',
-         'grooming santiago', 'estetica animal', 'corte perro'].map(q =>
-          searchNominatim({ q, limit: '20' }, ctrl.signal)
-            .then(items => {
-              console.log(`[nominatim:peluca] q="${q}" → ${items.length} resultados`)
-              return items
-            })
-            .catch(err => {
-              console.warn(`[nominatim:peluca] q="${q}" ERROR:`, err?.message)
-              return []
-            })
-        )
-      ).then(r => {
-        const merged = r.flatMap(x => x.status === 'fulfilled' ? x.value : [])
-        const uniqueIds = new Set(merged.map(i => i.place_id))
-        console.log(`[nominatim:peluca] TOTAL antes dedup: ${merged.length} → IDs únicos: ${uniqueIds.size}`)
-        return merged
-      }),
-
-      // ── ACUARIOS: naming chileno específico ────────────────────────────────
-      Promise.allSettled(
-        ['acuario mascotas', 'peces ornamentales', 'tienda peces',
-         'mundo acuatico', 'acuario santiago'].map(q =>
-          searchNominatim({ q, viewbox: bbox, bounded: '0', limit: '10' }, ctrl.signal)
-            .catch(() => [])
-        )
-      ).then(r => r.flatMap(x => x.status === 'fulfilled' ? x.value : [])),
-
-    ])
-
-    const allItems = [
-      ...(tiendaSettled.status  === 'fulfilled' ? tiendaSettled.value  : []),
-      ...(pelucaSettled.status  === 'fulfilled' ? pelucaSettled.value  : []),
-      ...(acuarioSettled.status === 'fulfilled' ? acuarioSettled.value : []),
-    ]
-    console.log('[nominatim] stores raw:', allItems.length, '(tiendas + peluquerías + acuarios)')
-
-    // Dedup por place_id
-    const seen = new Set()
-    const unique = allItems.filter(i => {
-      if (seen.has(i.place_id)) return false
-      seen.add(i.place_id)
-      return true
-    })
-
-    clearTimeout(safety)
-
-    return unique
-      .map(i => toStore(i, lat, lon))
-      .filter(Boolean)
-      .filter(s => s.distanceKm <= MAX_KM)   // ← descarta > 30km
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-
+    for (const radius of [10000, 25000, 50000]) {
+      const query = `
+        [out:json][timeout:25];
+        (
+          nwr["shop"="pet"](around:${radius},${lat},${lon});
+          nwr["shop"="pet_food"](around:${radius},${lat},${lon});
+          nwr["shop"="pet_grooming"](around:${radius},${lat},${lon});
+          nwr["craft"="pet_grooming"](around:${radius},${lat},${lon});
+          nwr["amenity"="pet_grooming"](around:${radius},${lat},${lon});
+          nwr["shop"="aquatics"](around:${radius},${lat},${lon});
+        );
+        out center 120;`
+      try {
+        const elements = await runOverpass(query, ctrl.signal)
+        const results = elements
+          .map(e => toStore(e, lat, lon))
+          .filter(Boolean)
+          .sort((a, b) => a.distanceKm - b.distanceKm)
+        console.log(`[overpass] stores radio=${radius}m →`, results.length)
+        if (results.length > 0) { clearTimeout(safety); return results }
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err
+        console.warn('[overpass] stores error radio=' + radius + ':', err?.message)
+      }
+    }
   } finally {
     clearTimeout(safety)
   }
