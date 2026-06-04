@@ -186,6 +186,18 @@ function MemoriaGame({ onBack, onReplay }) {
   const [lock,       setLock]       = useState(false)
   const [done,       setDone]       = useState(false)
   const COINS = 120
+  const wonRef = useRef(false)
+
+  // Victoria robusta: cuando TODAS las cartas quedan emparejadas (deriva del
+  // estado real, sin depender de contadores en closures).
+  useEffect(() => {
+    if (!wonRef.current && cards.length > 0 && cards.every(c => c.matched)) {
+      wonRef.current = true
+      addCoins(COINS)
+      const t = setTimeout(() => setDone(true), 700)
+      return () => clearTimeout(t)
+    }
+  }, [cards]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFlip = (id) => {
     if (lock) return
@@ -204,9 +216,7 @@ function MemoriaGame({ onBack, onReplay }) {
     if (a.emoji === b.emoji) {
       setTimeout(() => {
         setCards(cs => cs.map(c => newFlipped.includes(c.id) ? { ...c, matched:true } : c))
-        const next = matches + 1
-        setMatches(next)
-        if (next === MEM_EMOJIS.length) { addCoins(COINS); setTimeout(() => setDone(true), 600) }
+        setMatches(m => m + 1)
         setFlippedIds([]); setLock(false)
       }, 450)
     } else {
@@ -281,6 +291,7 @@ function ReaccionGame({ onBack, onReplay }) {
   const [rt,     setRt]     = useState(0)
   const [best,   setBest]   = useState(() => lsGet(BEST_KEY, 0))
   const shownAt = useRef(0)
+  const reactedRef = useRef(false)   // evita doble conteo dentro de una ronda
 
   useEffect(() => {
     if (phase !== 'waiting') return
@@ -288,6 +299,7 @@ function ReaccionGame({ onBack, onReplay }) {
       setPos({ x: rand(12, 88), y: rand(14, 86) })
       setEmoji(REACT_EMOJIS[rand(0, REACT_EMOJIS.length-1)])
       shownAt.current = Date.now()
+      reactedRef.current = false
       setPhase('active')
     }, rand(700, 1800))
     return () => clearTimeout(t)
@@ -309,7 +321,8 @@ function ReaccionGame({ onBack, onReplay }) {
   }, [phase, round])
 
   const handleTap = () => {
-    if (phase !== 'active') return
+    if (phase !== 'active' || reactedRef.current) return
+    reactedRef.current = true
     const ms = Date.now() - shownAt.current
     setRt(ms)
     if (best === 0 || ms < best) { setBest(ms); lsSet(BEST_KEY, ms) }
@@ -336,8 +349,9 @@ function ReaccionGame({ onBack, onReplay }) {
           <Centered><span style={{ fontFamily:F.body, fontSize:14, color:C.textMuted, animation:'g-pulse 1s infinite' }}>¡Prepárate…</span></Centered>
         )}
         {phase === 'active' && (
-          <div onClick={handleTap} style={{ position:'absolute', left:`${pos.x}%`, top:`${pos.y}%`,
-            transform:'translate(-50%,-50%)', fontSize:52, userSelect:'none', animation:'g-popIn .18s ease-out' }}>
+          <div style={{ position:'absolute', left:`${pos.x}%`, top:`${pos.y}%`,
+            transform:'translate(-50%,-50%)', fontSize:52, userSelect:'none', pointerEvents:'none',
+            animation:'g-popIn .18s ease-out' }}>
             {emoji}
           </div>
         )}
@@ -539,17 +553,21 @@ function AhorcadoGame({ onBack, onReplay }) {
   const [result,  setResult]  = useState(null)
   const MAX_WRONG = 6
   const uniqueLetters = [...new Set(breed.split(''))]
+  // Refs sincrónicas para evitar subcontar errores en clics rápidos.
+  const guessedRef = useRef(new Set())
+  const wrongRef   = useRef(0)
+  const resultRef  = useRef(null)
 
   const handleLetter = (letter) => {
-    if (guessed.has(letter) || result) return
-    const ng = new Set([...guessed, letter])
-    setGuessed(ng)
+    if (resultRef.current || guessedRef.current.has(letter)) return
+    guessedRef.current.add(letter)
+    setGuessed(new Set(guessedRef.current))
     if (!breed.includes(letter)) {
-      const nw = wrong + 1
-      setWrong(nw)
-      if (nw >= MAX_WRONG) setResult('lost')
-    } else if (uniqueLetters.every(l => ng.has(l))) {
-      setResult('won'); addCoins(60)
+      wrongRef.current += 1
+      setWrong(wrongRef.current)
+      if (wrongRef.current >= MAX_WRONG) { resultRef.current = 'lost'; setResult('lost') }
+    } else if (uniqueLetters.every(l => guessedRef.current.has(l))) {
+      resultRef.current = 'won'; setResult('won'); addCoins(60)
     }
   }
 
@@ -756,32 +774,41 @@ function SimonGame({ onBack, onReplay }) {
   const [round,  setRound]  = useState(0)
   const [coins,  setCoins]  = useState(0)
   const timers = useRef([])
+  // Refs sincrónicas: los toques rápidos leen el valor actual, no el del closure.
+  const seqRef   = useRef([])
+  const uIdxRef  = useRef(0)
+  const phaseRef = useRef('idle')
 
   const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = [] }
   useEffect(() => () => clearTimers(), [])
 
+  const goPhase = (p) => { phaseRef.current = p; setPhase(p) }
+
   const startRound = useCallback((prevSeq) => {
     const next = [...prevSeq, rand(0, 3)]
-    setSeq(next); setRound(next.length); setUIdx(0); setPhase('show')
+    seqRef.current = next; uIdxRef.current = 0
+    setSeq(next); setRound(next.length); setUIdx(0); goPhase('show')
     clearTimers()
     next.forEach((pad, i) => {
-      timers.current.push(setTimeout(() => setActive(pad), 600 * i + 350))
-      timers.current.push(setTimeout(() => setActive(-1), 600 * i + 700))
+      timers.current.push(setTimeout(() => setActive(pad), 600 * i + 400))
+      timers.current.push(setTimeout(() => setActive(-1), 600 * i + 780))
     })
-    timers.current.push(setTimeout(() => setPhase('input'), 600 * next.length + 450))
+    timers.current.push(setTimeout(() => goPhase('input'), 600 * next.length + 480))
   }, [])
 
   const handlePad = (i) => {
-    if (phase !== 'input') return
+    if (phaseRef.current !== 'input') return
     setActive(i); setTimeout(() => setActive(-1), 180)
-    if (i !== seq[uIdx]) { setPhase('over'); return }
-    if (uIdx + 1 === seq.length) {
-      const reward = 20
-      addCoins(reward); setCoins(c => c + reward)
-      setPhase('show')
-      timers.current.push(setTimeout(() => startRound(seq), 700))
+    const s = seqRef.current
+    const idx = uIdxRef.current
+    if (i !== s[idx]) { goPhase('over'); return }
+    if (idx + 1 === s.length) {
+      goPhase('show')                       // bloquea más toques de inmediato
+      addCoins(20); setCoins(c => c + 20)
+      timers.current.push(setTimeout(() => startRound(s), 750))
     } else {
-      setUIdx(uIdx + 1)
+      uIdxRef.current = idx + 1
+      setUIdx(idx + 1)
     }
   }
 
