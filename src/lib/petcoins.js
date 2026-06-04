@@ -77,9 +77,9 @@ export function PetCoinsProvider({ children }) {
     setToasts(t => [...t, { id, amount }])
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 2500)
 
-    // Supabase — fire-and-forget
+    // Supabase — fire-and-forget (builder es thenable pero sin .catch)
     const key = typeof actionKeyOrAmount === 'string' ? actionKeyOrAmount : 'custom'
-    supabase.from('petcoins').insert({ action: key, amount }).catch(() => {})
+    try { Promise.resolve(supabase.from('petcoins').insert({ action: key, amount })).catch(() => {}) } catch {}
   }, [])
 
   return (

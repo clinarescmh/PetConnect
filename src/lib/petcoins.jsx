@@ -77,9 +77,11 @@ export function PetCoinsProvider({ children }) {
     setToasts(t => [...t, { id, amount }])
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 2500)
 
-    // Supabase — fire-and-forget
+    // Supabase — fire-and-forget. El query builder de supabase-js es "thenable"
+    // pero NO tiene .catch; Promise.resolve(...) lo envuelve en una promesa real
+    // y el try/catch evita que un fallo de red/insert rompa el juego.
     const key = typeof actionKeyOrAmount === 'string' ? actionKeyOrAmount : 'custom'
-    supabase.from('petcoins').insert({ action: key, amount }).catch(() => {})
+    try { Promise.resolve(supabase.from('petcoins').insert({ action: key, amount })).catch(() => {}) } catch {}
   }, [])
 
   return (

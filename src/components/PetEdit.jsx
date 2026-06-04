@@ -41,7 +41,7 @@ export default function PetEdit({ pet, onSave, onClose }) {
         const { error: e } = await supabase.from('pets').update(payload).eq('id', pet.dbId)
         if (e) throw e
       } else {
-        await supabase.from('pets').insert(payload).catch(() => {}) // silent if table missing
+        await supabase.from('pets').insert(payload) // si la tabla no existe, supabase devuelve {error} sin lanzar
       }
       setSuccess(true)
       setTimeout(() => { onSave({ ...pet, ...payload }); onClose() }, 700)
